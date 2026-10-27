@@ -1,0 +1,53 @@
+@import "tailwindcss";
+@import "@fontsource-variable/plus-jakarta-sans";
+
+/* Same palette as the mobile app */
+@theme {
+  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --color-canvas: #f1f2ee;
+  --color-card: #ffffff;
+  --color-soft: #e8eae4;
+  --color-line: #e1e3dc;
+  --color-ink: #121212;
+  --color-ink-soft: #2b2b2b;
+  --color-muted: #73776e;
+  --color-faint: #a3a69d;
+  --color-lime: #c8e98a;
+  --color-lime-soft: #e8f5d0;
+  --color-lime-deep: #9cc556;
+  --color-lime-ink: #3a5512;
+  --color-danger: #e5484d;
+  --color-danger-soft: #fde8e8;
+  --color-whatsapp: #25d366;
+
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-canvas font-sans text-ink antialiased;
+  }
+  ::selection {
+    @apply bg-lime text-ink;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ink;
+  }
+}
+
+@utility container-page {
+  @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+}
+
+/* Hide horizontal scrollbars on chip rows */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
