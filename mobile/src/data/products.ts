@@ -29,7 +29,12 @@ export const PRODUCTS: Product[] = [
       "A sturdy matte-finish ceramic mug with a comfortable handle. Dishwasher and microwave safe. A desk favourite that keeps your brand in front of people every morning.",
     priceMin: 220,
     priceMax: 380,
-    occasions: ["Employee Onboarding", "New Year Gifts", "Events and Trade Shows"],
+    occasions: [
+      "Employee Onboarding",
+      "Corporate Diwali Gifting",
+      "New Year Gifts",
+      "Events and Trade Shows",
+    ],
     customisations: ["Logo printing", "Name personalisation"],
     images: [img("photo-1616241673111-508b4662c707")],
     minOrder: 50,

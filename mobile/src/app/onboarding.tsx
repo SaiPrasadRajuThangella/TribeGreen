@@ -52,7 +52,7 @@ export default function Onboarding() {
           Welcome kits, festive hampers and branded merchandise — customised with your logo and delivered
           across India.
         </Text>
-        <Button label="Get started" variant="dark" icon={ArrowRight} onPress={start} />
+        <Button label="Get started" variant="dark" icon={ArrowRight} iconPosition="right" onPress={start} />
       </Animated.View>
     </View>
   );

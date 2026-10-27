@@ -16,6 +16,7 @@ type Props = Omit<PressableScaleProps, "children"> & {
   label: string;
   variant?: keyof typeof VARIANTS;
   icon?: LucideIcon;
+  iconPosition?: "left" | "right";
   loading?: boolean;
   size?: "md" | "lg";
 };
@@ -24,6 +25,7 @@ export const Button = memo(function Button({
   label,
   variant = "primary",
   icon: Icon,
+  iconPosition = "left",
   loading = false,
   size = "lg",
   className = "",
@@ -47,10 +49,11 @@ export const Button = memo(function Button({
         <ActivityIndicator color={v.icon} />
       ) : (
         <View className="flex-row items-center gap-2">
-          {Icon ? <Icon size={18} color={v.icon} strokeWidth={2.2} /> : null}
+          {Icon && iconPosition === "left" ? <Icon size={18} color={v.icon} strokeWidth={2.2} /> : null}
           <Text weight="semibold" tone={v.tone} className={size === "lg" ? "text-[15px]" : "text-sm"}>
             {label}
           </Text>
+          {Icon && iconPosition === "right" ? <Icon size={18} color={v.icon} strokeWidth={2.2} /> : null}
         </View>
       )}
     </PressableScale>

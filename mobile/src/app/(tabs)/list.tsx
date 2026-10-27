@@ -132,6 +132,7 @@ export default function EnquiryList() {
           <Button
             label="Continue to enquiry"
             icon={ArrowRight}
+            iconPosition="right"
             variant="dark"
             className="mt-4"
             onPress={() => router.push("/enquiry")}
