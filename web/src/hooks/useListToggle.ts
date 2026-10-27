@@ -1,0 +1,24 @@
+import { useCallback, useMemo } from "react";
+
+import { useProducts } from "@/hooks/useProducts";
+import { useEnquiryList } from "@/store";
+
+// Shared add/remove handler so product cards get one stable callback
+export function useListToggle() {
+  const items = useEnquiryList((s) => s.items);
+  const add = useEnquiryList((s) => s.add);
+  const remove = useEnquiryList((s) => s.remove);
+  const { byId } = useProducts();
+
+  const inList = useMemo(() => new Set(items.map((i) => i.productId)), [items]);
+
+  const toggle = useCallback(
+    (id: string) => {
+      if (useEnquiryList.getState().items.some((i) => i.productId === id)) remove(id);
+      else add(id, byId.get(id)?.minOrder ?? 25);
+    },
+    [add, remove, byId],
+  );
+
+  return { inList, toggle };
+}
