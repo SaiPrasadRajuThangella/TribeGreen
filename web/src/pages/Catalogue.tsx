@@ -9,12 +9,11 @@ import { BUDGET_BANDS, getBudgetBand, OCCASION_META } from "@/data/catalog";
 import { useListToggle } from "@/hooks/useListToggle";
 import { useProducts } from "@/hooks/useProducts";
 import { useSeo } from "@/hooks/useSeo";
-import { type Filters, filterProducts } from "@/lib/filter";
+import { activeFilterCount, type Filters, filterProducts, joinCategories } from "@/lib/filter";
 import { type BudgetBandId, CATEGORIES, type Category, type Occasion, OCCASIONS } from "@/types";
 
 type Sort = "featured" | "price-asc" | "price-desc";
 
-const isCategory = (v: string | null): v is Category => CATEGORIES.includes(v as Category);
 const isOccasion = (v: string | null): v is Occasion => OCCASIONS.includes(v as Occasion);
 const isBudget = (v: string | null): v is BudgetBandId => BUDGET_BANDS.some((b) => b.id === v);
 
@@ -27,7 +26,8 @@ export default function Catalogue() {
 
   // The URL is the source of truth, so filtered views can be shared and bookmarked
   const filters: Filters = {
-    category: isCategory(params.get("category")) ? (params.get("category") as Category) : null,
+    // ?category=Drinkware&category=Apparel, kept in catalogue order
+    categories: CATEGORIES.filter((c) => params.getAll("category").includes(c)),
     occasion: isOccasion(params.get("occasion")) ? (params.get("occasion") as Occasion) : null,
     budget: isBudget(params.get("budget")) ? (params.get("budget") as BudgetBandId) : null,
   };
@@ -36,14 +36,14 @@ export default function Catalogue() {
   const deferredQuery = useDeferredValue(query);
 
   const update = useCallback(
-    (changes: Record<string, string | null>) => {
+    (changes: Record<string, string | string[] | null>) => {
       setParams(
         (prev) => {
           const next = new URLSearchParams(prev);
           next.delete("focus");
           for (const [k, v] of Object.entries(changes)) {
-            if (v) next.set(k, v);
-            else next.delete(k);
+            next.delete(k);
+            for (const value of Array.isArray(v) ? v : v ? [v] : []) next.append(k, value);
           }
           return next;
         },
@@ -53,8 +53,17 @@ export default function Catalogue() {
     [setParams],
   );
 
-  const toggleFilter = (key: keyof Filters, value: string) =>
+  const toggleFilter = (key: "occasion" | "budget", value: string) =>
     update({ [key]: filters[key] === value ? null : value });
+
+  // Categories combine: pick one, several, or All to clear them
+  const toggleCategory = (c: Category) =>
+    update({
+      category: filters.categories.includes(c)
+        ? filters.categories.filter((x) => x !== c)
+        : [...filters.categories, c],
+    });
+  const categoriesKey = filters.categories.join("|");
 
   useEffect(() => {
     if (params.get("focus")) searchRef.current?.focus();
@@ -67,28 +76,32 @@ export default function Catalogue() {
     return list;
     // filters is rebuilt from params on every render; depend on the primitive values
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products, filters.category, filters.occasion, filters.budget, deferredQuery, sort]);
+  }, [products, categoriesKey, filters.occasion, filters.budget, deferredQuery, sort]);
 
-  const activeCount = [filters.category, filters.occasion, filters.budget].filter(Boolean).length;
+  const activeCount = activeFilterCount(filters);
   const clearAll = () => update({ category: null, occasion: null, budget: null, q: null });
 
+  const categoryLabel = joinCategories(filters.categories);
   const heading = filters.occasion
     ? `${OCCASION_META[filters.occasion].short} gifts`
-    : (filters.category ?? "All corporate gifts");
+    : categoryLabel || "All corporate gifts";
 
   useSeo({
-    title: filters.occasion ? filters.occasion : filters.category ? `${filters.category} gifts` : "Catalogue",
+    title: filters.occasion ? filters.occasion : categoryLabel ? `${categoryLabel} gifts` : "Catalogue",
     description: `Browse ${results.length} corporate gifts${
-      filters.category ? ` in ${filters.category}` : ""
+      categoryLabel ? ` in ${categoryLabel}` : ""
     }${filters.occasion ? ` for ${filters.occasion}` : ""}. Filter by occasion and budget, customise with your logo.`,
     path: "/catalogue",
   });
 
   const filterPanel = (
     <div className="space-y-7">
-      <FilterGroup title="Category">
+      <FilterGroup title="Category" hint="Pick one or more">
+        <Chip selected={!filters.categories.length} onClick={() => update({ category: null })}>
+          All
+        </Chip>
         {CATEGORIES.map((c) => (
-          <Chip key={c} selected={filters.category === c} onClick={() => toggleFilter("category", c)}>
+          <Chip key={c} selected={filters.categories.includes(c)} onClick={() => toggleCategory(c)}>
             {c}
           </Chip>
         ))}
@@ -153,7 +166,8 @@ export default function Catalogue() {
         </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[260px_1fr]">
+      {/* minmax(0, …) keeps the swipeable chip row from stretching the page on phones */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="hidden lg:block">
           <div className="sticky top-24 rounded-[28px] bg-card p-6">
             <div className="mb-6 flex items-center justify-between">
@@ -176,11 +190,11 @@ export default function Catalogue() {
           {/* Category chips + active filters + sort */}
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div className="-mx-4 no-scrollbar flex gap-2 overflow-x-auto px-4 lg:hidden">
-              <Chip selected={!filters.category} onClick={() => update({ category: null })}>
+              <Chip selected={!filters.categories.length} onClick={() => update({ category: null })}>
                 All
               </Chip>
               {CATEGORIES.map((c) => (
-                <Chip key={c} selected={filters.category === c} onClick={() => toggleFilter("category", c)}>
+                <Chip key={c} selected={filters.categories.includes(c)} onClick={() => toggleCategory(c)}>
                   {c}
                 </Chip>
               ))}
@@ -303,10 +317,13 @@ export default function Catalogue() {
   );
 }
 
-function FilterGroup({ title, children }: { title: string; children: React.ReactNode }) {
+function FilterGroup({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
     <fieldset>
-      <legend className="mb-3 text-sm font-semibold text-muted">{title}</legend>
+      <legend className="mb-3 text-sm font-semibold text-muted">
+        {title}
+        {hint ? <span className="ml-2 text-xs font-normal text-faint">{hint}</span> : null}
+      </legend>
       <div className="flex flex-wrap gap-2">{children}</div>
     </fieldset>
   );
