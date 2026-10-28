@@ -1,4 +1,4 @@
-import { Gift, Menu, Search, ShoppingBag, X } from "lucide-react";
+import { Gift, Menu, Package, Search, ShoppingBag, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router";
@@ -79,6 +79,15 @@ export function Header() {
           >
             <Search size={19} />
           </Link>
+          {/* Phones reach My orders from the menu, to keep the header from overflowing */}
+          <Link
+            to="/orders"
+            aria-label="My orders"
+            title="My orders"
+            className="grid size-11 place-items-center rounded-full bg-card transition hover:bg-soft max-sm:hidden"
+          >
+            <Package size={19} />
+          </Link>
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -135,6 +144,12 @@ export function Header() {
                   {item.label}
                 </Link>
               ))}
+              <Link
+                to="/orders"
+                className="flex items-center gap-2 rounded-2xl px-4 py-3 font-medium hover:bg-card"
+              >
+                <Package size={17} /> My orders
+              </Link>
               <ButtonLink to="/enquiry" variant="dark" className="mt-2 sm:hidden">
                 Get a quote
               </ButtonLink>

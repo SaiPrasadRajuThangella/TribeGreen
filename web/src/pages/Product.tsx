@@ -4,10 +4,9 @@ import {
   Clock,
   type LucideIcon,
   MessageCircle,
-  Minus,
   Package,
   PenTool,
-  Plus,
+  Ruler,
   Send,
   Share2,
   ShoppingBag,
@@ -19,15 +18,17 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
 import { ProductCard } from "@/components/ProductCard";
-import { Button, ButtonLink } from "@/components/ui";
+import { QuantityEditor } from "@/components/QuantityEditor";
+import { Button } from "@/components/ui";
 import { formatINR, formatPriceRange, OCCASION_META } from "@/data/catalog";
 import { useListToggle } from "@/hooks/useListToggle";
 import { useProducts } from "@/hooks/useProducts";
 import { shareImageFor, useSeo } from "@/hooks/useSeo";
 import { SITE_URL } from "@/lib/config";
+import { defaultQuantity, estimateFor, type Quantity, quantityProblem } from "@/lib/items";
 import { productWhatsAppMessage, whatsappUrl } from "@/lib/whatsapp";
 import { useEnquiryList } from "@/store";
-import { type Customisation, CUSTOMISATIONS } from "@/types";
+import { type Customisation, CUSTOMISATIONS, type Product } from "@/types";
 
 import NotFound from "./NotFound";
 
@@ -39,15 +40,8 @@ const CUSTOM_ICONS: Record<Customisation, LucideIcon> = {
 
 export default function ProductPage() {
   const { id = "" } = useParams();
-  const { products, byId, loading } = useProducts();
+  const { byId, loading } = useProducts();
   const product = byId.get(id);
-  const navigate = useNavigate();
-  const { inList: listSet, toggle } = useListToggle();
-  const inList = useEnquiryList((s) => s.items.some((i) => i.productId === id));
-  const add = useEnquiryList((s) => s.add);
-  const setOpen = useEnquiryList((s) => s.setOpen);
-  const [units, setUnits] = useState<number | null>(null);
-  const [shared, setShared] = useState(false);
 
   useSeo({
     title: product?.name ?? "Gift not found",
@@ -59,18 +53,36 @@ export default function ProductPage() {
     noindex: !product && !loading,
   });
 
+  if (loading) return <div className="container-page h-[60vh]" />;
+  if (!product) return <NotFound />;
+  // Keyed so quantities reset when moving to another product
+  return <ProductDetail key={product.id} product={product} />;
+}
+
+function ProductDetail({ product }: { product: Product }) {
+  const { products } = useProducts();
+  const navigate = useNavigate();
+  const { inList: listSet, toggle } = useListToggle();
+  const listed = useEnquiryList((s) => s.items.find((i) => i.productId === product.id));
+  const put = useEnquiryList((s) => s.put);
+  const setOpen = useEnquiryList((s) => s.setOpen);
+  const [edited, setEdited] = useState<Quantity | null>(null);
+  const [shared, setShared] = useState(false);
+  const [tried, setTried] = useState(false);
+
   const similar = useMemo(
-    () =>
-      product
-        ? products.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4)
-        : [],
+    () => products.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4),
     [products, product],
   );
 
-  if (loading) return <div className="container-page h-[60vh]" />;
-  if (!product) return <NotFound />;
+  // What the visitor is editing, else what is already in their list, else a fresh start
+  const qty: Quantity = edited ?? listed ?? defaultQuantity(product);
+  const problem = quantityProblem(product, qty);
+  const estimate = estimateFor(product, qty.units);
+  const inList = !!listed;
+  const dirty = edited !== null;
+  const optionName = product.option?.name.toLowerCase();
 
-  const qty = units ?? product.minOrder;
   const pageUrl = `${SITE_URL}/product/${product.id}`;
   const waLink = whatsappUrl(productWhatsAppMessage(product.name, pageUrl));
 
@@ -88,11 +100,21 @@ export default function ProductPage() {
     }
   };
 
-  const addToList = () => {
-    if (inList) return setOpen(true);
-    add(product.id, qty);
-    setOpen(true);
+  // Saves the quantity to the list; false when it still needs sizes or more units
+  const commit = () => {
+    if (inList && !dirty) return true;
+    if (problem) {
+      setTried(true);
+      return false;
+    }
+    put(product.id, { units: qty.units, variants: qty.variants });
+    setEdited(null);
+    return true;
   };
+
+  const addToList = () => commit() && setOpen(true);
+  const enquireNow = () => commit() && navigate("/enquiry");
+  const listLabel = inList ? (dirty ? "Update list" : "In your list · View") : "Add to enquiry list";
 
   return (
     <>
@@ -153,51 +175,63 @@ export default function ProductPage() {
 
             <div className="mt-6 grid grid-cols-2 gap-3">
               <Fact icon={Package} label="Minimum order" value={`${product.minOrder} units`} />
-              <Fact icon={Clock} label="Lead time" value="7–10 days" />
+              {product.option ? (
+                <Fact
+                  icon={Ruler}
+                  label={`${product.option.name}s`}
+                  value={
+                    product.option.name === "Size"
+                      ? `${product.option.values[0]} – ${product.option.values.at(-1)}`
+                      : `${product.option.values.length} colours`
+                  }
+                />
+              ) : (
+                <Fact icon={Clock} label="Lead time" value="7–10 days" />
+              )}
             </div>
 
             {/* Quantity + actions */}
             <div className="mt-6 rounded-[28px] bg-card p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">Quantity</span>
-                <div className="flex items-center rounded-full bg-soft p-1">
-                  <QtyButton
-                    label="Decrease quantity"
-                    disabled={qty <= product.minOrder}
-                    onClick={() => setUnits(Math.max(product.minOrder, qty - 5))}
-                  >
-                    <Minus size={15} strokeWidth={2.5} />
-                  </QtyButton>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={product.minOrder}
-                    aria-label="Quantity in units"
-                    value={qty}
-                    onChange={(e) => setUnits(Math.max(1, Number(e.target.value) || 0))}
-                    onBlur={() => setUnits(Math.max(product.minOrder, qty))}
-                    className="w-16 [appearance:textfield] bg-transparent text-center font-bold tabular-nums outline-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                  <QtyButton label="Increase quantity" onClick={() => setUnits(qty + 5)}>
-                    <Plus size={15} strokeWidth={2.5} />
-                  </QtyButton>
+              {product.option ? (
+                <>
+                  <div className="mb-3 flex items-baseline justify-between gap-3">
+                    <span className="text-sm font-semibold">Quantity by {optionName}</span>
+                    <span className="text-xs text-muted">Mix freely · {product.minOrder} min in total</span>
+                  </div>
+                  <QuantityEditor product={product} value={qty} onChange={setEdited} />
+                  <div className="mt-4 flex items-center justify-between text-sm">
+                    <span className="text-muted">Total</span>
+                    <span className="font-bold tabular-nums">{qty.units.toLocaleString("en-IN")} units</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">Quantity</span>
+                  <QuantityEditor product={product} value={qty} onChange={setEdited} />
                 </div>
-              </div>
+              )}
               <p className="mt-3 text-sm text-muted">
-                Estimated {formatINR(qty * product.priceMin)} – {formatINR(qty * product.priceMax)}
+                {qty.units
+                  ? `Estimated ${formatINR(estimate.min)} – ${formatINR(estimate.max)}`
+                  : `Add units to each ${optionName} you need to see an estimate`}
               </p>
+              {problem && (tried || qty.units > 0) ? (
+                <p role="alert" className="mt-2 text-sm font-medium text-danger">
+                  {problem}
+                </p>
+              ) : null}
               <div className="mt-5 hidden gap-3 sm:flex">
                 <Button
-                  variant={inList ? "dark" : "primary"}
-                  icon={inList ? Check : ShoppingBag}
+                  variant={inList && !dirty ? "dark" : "primary"}
+                  icon={inList && !dirty ? Check : ShoppingBag}
                   className="flex-1"
                   onClick={addToList}
                 >
-                  {inList ? "In your list · View" : "Add to enquiry list"}
+                  {listLabel}
                 </Button>
-                <ButtonLink to={`/enquiry?product=${product.id}&units=${qty}`} variant="dark" icon={Send}>
+                <Button variant="dark" icon={Send} onClick={enquireNow}>
                   Enquire now
-                </ButtonLink>
+                </Button>
               </div>
               <div className="mt-3 hidden gap-3 sm:flex">
                 <a
@@ -289,19 +323,14 @@ export default function ProductPage() {
           <MessageCircle size={22} />
         </a>
         <Button
-          variant={inList ? "dark" : "primary"}
-          icon={inList ? Check : ShoppingBag}
+          variant={inList && !dirty ? "dark" : "primary"}
+          icon={inList && !dirty ? Check : ShoppingBag}
           className="flex-1"
           onClick={addToList}
         >
-          {inList ? "In your list" : "Add to list"}
+          {inList ? (dirty ? "Update list" : "In your list") : "Add to list"}
         </Button>
-        <Button
-          variant="dark"
-          aria-label="Enquire now"
-          className="!px-5"
-          onClick={() => navigate(`/enquiry?product=${product.id}&units=${qty}`)}
-        >
+        <Button variant="dark" aria-label="Enquire now" className="!px-5" onClick={enquireNow}>
           <Send size={18} />
         </Button>
       </div>
@@ -318,30 +347,6 @@ function Fact({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
         <p className="font-semibold">{value}</p>
       </div>
     </div>
-  );
-}
-
-function QtyButton({
-  label,
-  onClick,
-  disabled,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      disabled={disabled}
-      className="grid size-9 place-items-center rounded-full bg-card transition active:scale-90 disabled:opacity-40"
-    >
-      {children}
-    </button>
   );
 }
 

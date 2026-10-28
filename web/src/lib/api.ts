@@ -1,5 +1,13 @@
 import { PRODUCTS } from "@/data/products";
-import type { Enquiry, EnquiryInput, EnquiryStatus, Product } from "@/types";
+import type {
+  Enquiry,
+  EnquiryInput,
+  EnquiryRef,
+  EnquiryStatus,
+  OrderChanges,
+  OrderDraft,
+  Product,
+} from "@/types";
 
 import { API_URL, USE_MOCK } from "./config";
 import { MOCK_ADMIN, MOCK_TOKEN, mockDb } from "./mockDb";
@@ -13,6 +21,8 @@ export class ApiError extends Error {
     this.status = status;
   }
 }
+
+const notFound = () => new ApiError("Enquiry not found", 404);
 
 async function request<T>(path: string, init: RequestInit & { token?: string } = {}): Promise<T> {
   const { token, ...rest } = init;
@@ -47,6 +57,16 @@ export async function createEnquiry(input: EnquiryInput): Promise<Enquiry> {
   });
 }
 
+// The customer's own enquiries and orders, matched by reference + phone number
+export async function trackEnquiries(refs: EnquiryRef[]): Promise<Enquiry[]> {
+  if (!refs.length) return [];
+  if (USE_MOCK) {
+    await wait(250);
+    return mockDb.track(refs);
+  }
+  return request<Enquiry[]>("/api/enquiries/track", { method: "POST", body: JSON.stringify({ refs }) });
+}
+
 /* ---------- Admin (needs the token from login) ---------- */
 
 export async function adminLogin(username: string, password: string): Promise<{ token: string }> {
@@ -73,13 +93,37 @@ export async function updateEnquiryStatus(
   status: EnquiryStatus,
 ): Promise<Enquiry> {
   if (USE_MOCK) {
-    const updated = mockDb.setStatus(id, status);
-    if (!updated) throw new ApiError("Enquiry not found", 404);
-    return updated;
+    return mockDb.setStatus(id, status) ?? Promise.reject(notFound());
   }
   return request<Enquiry>(`/api/admin/enquiries/${id}`, {
     method: "PATCH",
     token,
     body: JSON.stringify({ status }),
+  });
+}
+
+// Turns an agreed quote into an order: final prices + delivery date. Sets the status to Converted
+export async function finaliseOrder(token: string, id: string, draft: OrderDraft): Promise<Enquiry> {
+  if (USE_MOCK) {
+    await wait(400);
+    return mockDb.finalise(id, draft) ?? Promise.reject(notFound());
+  }
+  return request<Enquiry>(`/api/admin/enquiries/${id}/order`, {
+    method: "POST",
+    token,
+    body: JSON.stringify(draft),
+  });
+}
+
+// Moves the order along (Confirmed → In production → Dispatched → Delivered) or changes the date
+export async function updateOrder(token: string, id: string, changes: OrderChanges): Promise<Enquiry> {
+  if (USE_MOCK) {
+    await wait(300);
+    return mockDb.updateOrder(id, changes) ?? Promise.reject(notFound());
+  }
+  return request<Enquiry>(`/api/admin/enquiries/${id}/order`, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify(changes),
   });
 }

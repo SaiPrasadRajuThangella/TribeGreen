@@ -43,7 +43,12 @@ export const ProductCard = memo(function ProductCard({ product, inList, onToggle
         <div className="mt-3 flex items-end justify-between">
           <div>
             <p className="text-[15px] font-bold">{formatINR(product.priceMin)}</p>
-            <p className="text-[11px] text-faint">onwards / unit</p>
+            <p className="text-[11px] text-faint">
+              onwards / unit
+              {product.option
+                ? ` · ${product.option.values.length} ${product.option.name.toLowerCase()}s`
+                : ""}
+            </p>
           </div>
           <button
             type="button"

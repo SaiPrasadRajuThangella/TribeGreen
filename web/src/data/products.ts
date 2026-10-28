@@ -1,4 +1,10 @@
-import type { Product } from "@/types";
+import type { Product, ProductOption } from "@/types";
+
+// Every gift can be ordered from 10 units
+export const MIN_ORDER = 10;
+
+const SIZES: ProductOption = { name: "Size", values: ["XS", "S", "M", "L", "XL", "XXL"] };
+const colours = (...values: string[]): ProductOption => ({ name: "Colour", values });
 
 // Free Unsplash photos, resized on Unsplash's CDN
 const img = (id: string, w = 900) =>
@@ -17,7 +23,8 @@ export const PRODUCTS: Product[] = [
     occasions: ["Employee Onboarding", "Events and Trade Shows", "Employee Recognition"],
     customisations: ["Logo printing", "Laser engraving", "Name personalisation"],
     images: [img("photo-1782582270361-262dac15aa4f")],
-    minOrder: 25,
+    minOrder: MIN_ORDER,
+    option: colours("Black", "White", "Sage", "Navy"),
     tag: "Bestseller",
   },
   {
@@ -37,7 +44,7 @@ export const PRODUCTS: Product[] = [
     ],
     customisations: ["Logo printing", "Name personalisation"],
     images: [img("photo-1616241673111-508b4662c707")],
-    minOrder: 50,
+    minOrder: MIN_ORDER,
   },
   {
     id: "travel-tumbler",
@@ -51,7 +58,7 @@ export const PRODUCTS: Product[] = [
     occasions: ["Client and Vendor Gifting", "Corporate Diwali Gifting", "New Year Gifts"],
     customisations: ["Laser engraving", "Logo printing"],
     images: [img("photo-1581157019452-2b854e1a020a")],
-    minOrder: 25,
+    minOrder: MIN_ORDER,
     tag: "New",
   },
   {
@@ -60,13 +67,14 @@ export const PRODUCTS: Product[] = [
     category: "Apparel",
     shortDescription: "Heavyweight 320 GSM cotton-blend hoodie.",
     description:
-      "A soft brushed-fleece pullover hoodie in a relaxed fit. Embroidered or printed logo on the chest, with sizes from XS to 3XL. The team-swag piece people actually wear.",
+      "A soft brushed-fleece pullover hoodie in a relaxed fit. Embroidered or printed logo on the chest, in sizes XS to XXL. The team-swag piece people actually wear.",
     priceMin: 1250,
     priceMax: 1690,
     occasions: ["Employee Onboarding", "Employee Recognition", "Events and Trade Shows"],
     customisations: ["Logo printing", "Name personalisation"],
     images: [img("photo-1620799140188-3b2a02fd9a77")],
-    minOrder: 20,
+    minOrder: MIN_ORDER,
+    option: SIZES,
     tag: "Bestseller",
   },
   {
@@ -81,7 +89,8 @@ export const PRODUCTS: Product[] = [
     occasions: ["Events and Trade Shows", "Employee Onboarding"],
     customisations: ["Logo printing"],
     images: [img("photo-1714317438040-0e8584215699")],
-    minOrder: 30,
+    minOrder: MIN_ORDER,
+    option: SIZES,
   },
   {
     id: "baseball-cap",
@@ -95,7 +104,8 @@ export const PRODUCTS: Product[] = [
     occasions: ["Events and Trade Shows", "Employee Recognition"],
     customisations: ["Logo printing"],
     images: [img("photo-1691256676359-20e5c6d4bc92")],
-    minOrder: 50,
+    minOrder: MIN_ORDER,
+    option: colours("Black", "Navy", "Beige", "White"),
   },
   {
     id: "leather-notebook",
@@ -109,7 +119,7 @@ export const PRODUCTS: Product[] = [
     occasions: ["New Year Gifts", "Client and Vendor Gifting", "Employee Onboarding"],
     customisations: ["Laser engraving", "Name personalisation"],
     images: [img("photo-1679891984409-0a3b1c4984ac")],
-    minOrder: 25,
+    minOrder: MIN_ORDER,
     tag: "Bestseller",
   },
   {
@@ -124,7 +134,7 @@ export const PRODUCTS: Product[] = [
     occasions: ["Employee Onboarding", "Employee Recognition", "Client and Vendor Gifting"],
     customisations: ["Logo printing", "Name personalisation"],
     images: [img("photo-1553062407-98eeb64c6a62")],
-    minOrder: 15,
+    minOrder: MIN_ORDER,
   },
   {
     id: "wireless-charger",
@@ -138,7 +148,7 @@ export const PRODUCTS: Product[] = [
     occasions: ["Client and Vendor Gifting", "Corporate Diwali Gifting", "New Year Gifts"],
     customisations: ["Laser engraving", "Logo printing"],
     images: [img("photo-1778854096628-0266421cac9e")],
-    minOrder: 20,
+    minOrder: MIN_ORDER,
   },
   {
     id: "yoga-mat",
@@ -152,7 +162,8 @@ export const PRODUCTS: Product[] = [
     occasions: ["Employee Recognition", "New Year Gifts"],
     customisations: ["Logo printing", "Laser engraving"],
     images: [img("photo-1646239646963-b0b9be56d6b5")],
-    minOrder: 10,
+    minOrder: MIN_ORDER,
+    option: colours("Sage", "Lavender", "Charcoal"),
     tag: "Eco",
   },
   {
@@ -167,7 +178,7 @@ export const PRODUCTS: Product[] = [
     occasions: ["Corporate Diwali Gifting", "Client and Vendor Gifting"],
     customisations: ["Logo printing", "Name personalisation"],
     images: [img("photo-1768690569742-9705f4c98f22")],
-    minOrder: 25,
+    minOrder: MIN_ORDER,
   },
   {
     id: "tea-gift-box",
@@ -181,7 +192,7 @@ export const PRODUCTS: Product[] = [
     occasions: ["Corporate Diwali Gifting", "Client and Vendor Gifting", "New Year Gifts"],
     customisations: ["Laser engraving", "Logo printing"],
     images: [img("photo-1645869794108-400133a0c1c6")],
-    minOrder: 10,
+    minOrder: MIN_ORDER,
     tag: "New",
   },
 ];

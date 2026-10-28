@@ -53,6 +53,7 @@ export function Footer() {
             <MapPin size={15} /> Hyderabad, India
           </li>
           <FooterLink to="/enquiry">Request a quote</FooterLink>
+          <FooterLink to="/orders">Track my order</FooterLink>
         </FooterColumn>
       </div>
       <div className="border-t border-line">

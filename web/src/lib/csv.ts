@@ -1,9 +1,16 @@
 import { getBudgetBand } from "@/data/catalog";
-import type { Enquiry } from "@/types";
+import type { Enquiry, EnquiryItem } from "@/types";
+
+import { describeVariants } from "./items";
+
+// "Essential Hoodie × 60 (M × 20 · L × 40)"
+const giftCell = (p: EnquiryItem) =>
+  `${p.name} × ${p.units}${p.variants?.length ? ` (${describeVariants(p.variants)})` : ""}`;
 
 const COLUMNS: [string, (e: Enquiry) => string | number][] = [
   ["Reference", (e) => e.id],
   ["Created at", (e) => new Date(e.createdAt).toLocaleString("en-IN")],
+  ["Call back by", (e) => new Date(e.respondBy).toLocaleString("en-IN")],
   ["Source", (e) => e.source],
   ["Status", (e) => e.status],
   ["Name", (e) => e.name],
@@ -14,9 +21,12 @@ const COLUMNS: [string, (e: Enquiry) => string | number][] = [
   ["Units", (e) => e.units],
   ["Budget per unit", (e) => getBudgetBand(e.budget)?.label ?? e.budget],
   ["Delivery date", (e) => e.deliveryDate],
-  ["Products", (e) => e.products.map((p) => p.name).join("; ")],
+  ["Products", (e) => e.products.map(giftCell).join("; ")],
   ["Customisation", (e) => e.customisations.join("; ")],
   ["Message", (e) => e.message],
+  ["Order stage", (e) => e.order?.stage ?? ""],
+  ["Expected delivery", (e) => e.order?.expectedDelivery ?? ""],
+  ["Order total", (e) => e.order?.total ?? ""],
 ];
 
 // Quote every cell so commas, quotes and new lines survive Excel

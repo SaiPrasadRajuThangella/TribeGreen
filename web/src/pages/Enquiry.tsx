@@ -1,14 +1,18 @@
-import { AlertCircle, Plus, Send, X } from "lucide-react";
+import { AlertCircle, Plus, Send } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate } from "react-router";
 
+import { GiftRow } from "@/components/GiftRow";
 import { Button, Chip } from "@/components/ui";
 import { BUDGET_BANDS, formatINR, OCCASION_META } from "@/data/catalog";
 import { useProducts } from "@/hooks/useProducts";
 import { useSeo } from "@/hooks/useSeo";
 import { createEnquiry } from "@/lib/api";
+import { REPLY_WITHIN_HOURS } from "@/lib/config";
+import { estimateFor, quantityProblem, toEnquiryItem } from "@/lib/items";
 import { type EnquiryFormErrors, type EnquiryFormValues, validateEnquiry } from "@/lib/validation";
-import { useEnquiryList } from "@/store";
+import { type EnquiryDraft, useEnquiryDraft, useEnquiryList, useMyEnquiries } from "@/store";
 import { CUSTOMISATIONS, type Customisation, OCCASIONS } from "@/types";
 
 const tomorrow = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -16,59 +20,62 @@ const tomorrow = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10
 export default function EnquiryPage() {
   useSeo({
     title: "Request a quote",
-    description:
-      "Tell us about your corporate gifting needs: occasion, quantity, budget and delivery date. Our team replies within 48 hours.",
+    description: `Tell us about your corporate gifting needs: occasion, quantity, budget and delivery date. Our team calls you back within ${REPLY_WITHIN_HOURS} hours.`,
     path: "/enquiry",
   });
 
-  const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { byId, loading } = useProducts();
+  const { byId } = useProducts();
   const listItems = useEnquiryList((s) => s.items);
-  const removeFromList = useEnquiryList((s) => s.remove);
+  const clearList = useEnquiryList((s) => s.clear);
   const setListOpen = useEnquiryList((s) => s.setOpen);
+  // Saved as the visitor types, so details survive a trip to the catalogue
+  const draft = useEnquiryDraft((s) => s.draft);
+  const setField = useEnquiryDraft((s) => s.setField);
+  const clearDraft = useEnquiryDraft((s) => s.clear);
+  const rememberEnquiry = useMyEnquiries((s) => s.add);
 
-  // Start from one product (?product=) or everything in the enquiry list
-  const initial = useMemo<EnquiryFormValues>(() => {
-    const productParam = params.get("product");
-    const source = productParam
-      ? [
-          {
-            productId: productParam,
-            units: Number(params.get("units")) || byId.get(productParam)?.minOrder || 25,
-          },
-        ]
-      : listItems;
-    const products = source.flatMap((i) => {
-      const p = byId.get(i.productId);
-      return p ? [{ id: p.id, name: p.name }] : [];
-    });
-    const units = source.reduce((sum, i) => sum + i.units, 0);
-    return {
-      name: "",
-      company: "",
-      phone: "",
-      email: "",
-      occasion: undefined as unknown as EnquiryFormValues["occasion"],
-      units: units ? String(units) : "",
-      budget: undefined as unknown as EnquiryFormValues["budget"],
-      deliveryDate: "",
-      products,
-      customisations: [],
-      message: "",
-    };
-    // Recompute once products have loaded; afterwards the form owns the values
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
-
-  const [values, setValues] = useState<EnquiryFormValues | null>(null);
-  const form = values ?? initial;
   const [errors, setErrors] = useState<EnquiryFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const set = <K extends keyof EnquiryFormValues>(key: K, value: EnquiryFormValues[K]) => {
-    setValues((v) => ({ ...(v ?? initial), [key]: value }));
+  // Gifts come straight from the enquiry list
+  const gifts = useMemo(
+    () =>
+      listItems.flatMap((item) =>
+        byId.get(item.productId) ? [{ item, product: byId.get(item.productId)! }] : [],
+      ),
+    [listItems, byId],
+  );
+  const totals = useMemo(
+    () =>
+      gifts.reduce(
+        (acc, { item, product }) => {
+          const e = estimateFor(product, item.units);
+          return { units: acc.units + item.units, min: acc.min + e.min, max: acc.max + e.max };
+        },
+        { units: 0, min: 0, max: 0 },
+      ),
+    [gifts],
+  );
+
+  const form: EnquiryFormValues = {
+    name: "",
+    company: "",
+    phone: "",
+    email: "",
+    deliveryDate: "",
+    customisations: [],
+    message: "",
+    ...draft,
+    occasion: draft.occasion as EnquiryFormValues["occasion"],
+    budget: draft.budget as EnquiryFormValues["budget"],
+    units: totals.units,
+    products: gifts.map(({ item, product }) => toEnquiryItem(product, item)),
+  };
+
+  const set = <K extends keyof EnquiryDraft>(key: K, value: EnquiryDraft[K]) => {
+    setField(key, value);
     setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
   };
 
@@ -81,7 +88,11 @@ export default function EnquiryPage() {
     e.preventDefault();
     setServerError(null);
     const { data, errors: found } = validateEnquiry(form);
-    if (!data) {
+    // Sizes are checked here too: the schema can't know which gifts come in sizes
+    if (gifts.some(({ item, product }) => quantityProblem(product, item))) {
+      found.products = "Finish the quantities for the marked gifts";
+    }
+    if (!data || found.products) {
       setErrors(found);
       // Move focus to the first field that needs attention
       const first = Object.keys(found)[0];
@@ -92,7 +103,9 @@ export default function EnquiryPage() {
     setSubmitting(true);
     try {
       const enquiry = await createEnquiry(data);
-      data.products.forEach((p) => removeFromList(p.id));
+      rememberEnquiry({ id: enquiry.id, phone: enquiry.phone });
+      clearList();
+      clearDraft();
       navigate(`/thank-you/${enquiry.id}`, { state: { enquiry } });
     } catch (err) {
       setServerError((err as Error).message);
@@ -102,22 +115,21 @@ export default function EnquiryPage() {
   };
 
   const errorCount = Object.values(errors).filter(Boolean).length;
-  const estimate = form.products.reduce(
-    (acc, p) => {
-      const product = byId.get(p.id);
-      return product ? { min: acc.min + product.priceMin, max: acc.max + product.priceMax } : acc;
-    },
-    { min: 0, max: 0 },
-  );
 
   return (
     <div className="container-page pt-6 pb-10">
       <div className="mb-8 max-w-2xl">
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Request a quote</h1>
-        <p className="mt-2 text-muted">Tell us what you need. Our gifting team replies within 48 hours.</p>
+        <p className="mt-2 text-muted">
+          Tell us what you need. Our gifting team calls you back within {REPLY_WITHIN_HOURS} hours.
+        </p>
       </div>
 
-      <form noValidate onSubmit={submit} className="grid gap-6 lg:grid-cols-[1fr_380px] lg:items-start">
+      <form
+        noValidate
+        onSubmit={submit}
+        className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start"
+      >
         <div className="space-y-5">
           {errorCount > 0 ? (
             <div
@@ -195,14 +207,13 @@ export default function EnquiryPage() {
             </Field>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <Field label="Number of units" name="units" error={errors.units}>
+              <Field label="Number of units" name="units" error={errors.units} hint="Total of your gifts">
                 <input
                   id="field-units"
-                  inputMode="numeric"
-                  placeholder="100"
-                  value={String(form.units ?? "")}
-                  onChange={(e) => set("units", e.target.value.replace(/[^0-9]/g, ""))}
-                  className={inputCls(errors.units)}
+                  readOnly
+                  aria-describedby="hint-units"
+                  value={totals.units ? totals.units.toLocaleString("en-IN") : "Add gifts to see the total"}
+                  className={`${inputCls(errors.units)} cursor-default bg-soft/60 font-semibold focus:bg-soft/60`}
                 />
               </Field>
               <Field label="Delivery date" name="deliveryDate" error={errors.deliveryDate}>
@@ -262,46 +273,33 @@ export default function EnquiryPage() {
 
         {/* Summary */}
         <aside className="lg:sticky lg:top-24">
-          <div className={`rounded-[28px] bg-card p-6 ${errors.products ? "ring-2 ring-danger" : ""}`}>
-            <h2 className="mb-4 text-lg font-bold">Gifts in this enquiry</h2>
-            {form.products.length ? (
+          <div
+            id="field-products"
+            tabIndex={-1}
+            className={`rounded-[28px] bg-card p-5 outline-none sm:p-6 ${errors.products ? "ring-2 ring-danger" : ""}`}
+          >
+            <div className="mb-4 flex items-baseline justify-between">
+              <h2 className="text-lg font-bold">Gifts in this enquiry</h2>
+              {gifts.length ? (
+                <span className="text-sm text-muted">
+                  {gifts.length} {gifts.length === 1 ? "gift" : "gifts"}
+                </span>
+              ) : null}
+            </div>
+            {gifts.length ? (
               <ul className="space-y-2.5">
-                {form.products.map((p) => {
-                  const product = byId.get(p.id);
-                  return (
-                    <li key={p.id} className="flex items-center gap-3 rounded-2xl bg-canvas p-2">
-                      <img
-                        src={product?.images[0]}
-                        alt=""
-                        className="size-12 rounded-xl bg-soft object-cover"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold">{p.name}</span>
-                        {product ? (
-                          <span className="text-xs text-muted">
-                            from {formatINR(product.priceMin)} / unit
-                          </span>
-                        ) : null}
-                      </span>
-                      <button
-                        type="button"
-                        aria-label={`Remove ${p.name}`}
-                        onClick={() =>
-                          set(
-                            "products",
-                            form.products.filter((x) => x.id !== p.id),
-                          )
-                        }
-                        className="grid size-8 place-items-center rounded-full bg-card text-muted hover:text-danger"
-                      >
-                        <X size={14} />
-                      </button>
-                    </li>
-                  );
-                })}
+                <AnimatePresence initial={false}>
+                  {gifts.map(({ item, product }) => (
+                    <motion.li key={product.id} layout exit={{ opacity: 0, x: 30 }}>
+                      <GiftRow item={item} product={product} surface="canvas" />
+                    </motion.li>
+                  ))}
+                </AnimatePresence>
               </ul>
             ) : (
-              <p className="rounded-2xl bg-canvas p-4 text-sm text-muted">No gifts added yet.</p>
+              <p className="rounded-2xl bg-canvas p-4 text-sm text-muted">
+                No gifts added yet. Pick a few from the catalogue; what you've typed here stays saved.
+              </p>
             )}
             {errors.products ? <p className="mt-2 text-sm text-danger">{errors.products}</p> : null}
 
@@ -310,15 +308,21 @@ export default function EnquiryPage() {
               className="mt-3 flex h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-faint text-sm font-semibold text-ink-soft transition hover:border-ink"
               onClick={() => setListOpen(false)}
             >
-              <Plus size={16} /> Add more gifts
+              <Plus size={16} /> {gifts.length ? "Add more gifts" : "Browse gifts"}
             </Link>
 
-            {form.products.length ? (
-              <div className="mt-5 flex justify-between border-t border-line pt-4 text-sm">
-                <span className="text-muted">Price range per unit</span>
-                <span className="font-semibold">
-                  {formatINR(estimate.min)} – {formatINR(estimate.max)}
-                </span>
+            {gifts.length ? (
+              <div className="mt-5 space-y-2 border-t border-line pt-4 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted">Total units</span>
+                  <span className="font-semibold tabular-nums">{totals.units.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">Estimated budget</span>
+                  <span className="font-semibold tabular-nums">
+                    {formatINR(totals.min)} – {formatINR(totals.max)}
+                  </span>
+                </div>
               </div>
             ) : null}
 
@@ -332,7 +336,7 @@ export default function EnquiryPage() {
               Send enquiry
             </Button>
             <p className="mt-3 text-center text-xs text-faint">
-              No payment needed. We'll call you with a quote.
+              No payment needed. We'll call you with a quote within {REPLY_WITHIN_HOURS} hours.
             </p>
           </div>
         </aside>
@@ -360,6 +364,7 @@ function Field({
   name,
   error,
   optional,
+  hint,
   as = "div",
   children,
 }: {
@@ -367,6 +372,7 @@ function Field({
   name: string;
   error?: string;
   optional?: boolean;
+  hint?: string;
   as?: "div" | "fieldset";
   children: React.ReactNode;
 }) {
@@ -394,6 +400,11 @@ function Field({
           {label}
         </label>
         {optional ? <span className="text-xs text-faint">Optional</span> : null}
+        {hint ? (
+          <span id={`hint-${name}`} className="text-xs text-faint">
+            {hint}
+          </span>
+        ) : null}
       </div>
       {children}
       {errorText}

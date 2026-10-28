@@ -23,6 +23,9 @@ export type BudgetBand = {
   max: number;
 };
 
+// A product can come in sizes or colours; the buyer splits units across them (10 M + 10 L)
+export type ProductOption = { name: "Size" | "Colour"; values: string[] };
+
 export type Product = {
   id: string;
   name: string;
@@ -35,7 +38,18 @@ export type Product = {
   customisations: Customisation[];
   images: string[];
   minOrder: number;
+  option?: ProductOption;
   tag?: "Bestseller" | "New" | "Eco";
+};
+
+export type VariantQty = { label: string; units: number };
+
+// One gift in an enquiry. Products with sizes or colours list units per variant
+export type EnquiryItem = {
+  id: string;
+  name: string;
+  units: number;
+  variants?: VariantQty[];
 };
 
 export type EnquiryStatus = "New" | "Contacted" | "Converted" | "Lost";
@@ -49,14 +63,39 @@ export type EnquiryInput = {
   units: number;
   budget: BudgetBandId;
   deliveryDate: string; // ISO date (yyyy-mm-dd)
-  products: { id: string; name: string }[];
+  products: EnquiryItem[];
   customisations: Customisation[];
   message: string;
 };
+
+export const ORDER_STAGES = ["Confirmed", "In production", "Dispatched", "Delivered"] as const;
+export type OrderStage = (typeof ORDER_STAGES)[number];
+
+export type OrderItem = EnquiryItem & { unitPrice: number };
+
+// Created by the admin once the customer agrees to the quote
+export type Order = {
+  items: OrderItem[];
+  total: number;
+  expectedDelivery: string; // ISO date (yyyy-mm-dd)
+  stage: OrderStage;
+  note: string; // shown to the customer, e.g. courier and tracking number
+  confirmedAt: string;
+  updatedAt: string;
+};
+
+// What the admin fills in to finalise an order, and what can change afterwards
+export type OrderDraft = Pick<Order, "items" | "expectedDelivery" | "note">;
+export type OrderChanges = Partial<Pick<Order, "stage" | "expectedDelivery" | "note">>;
 
 export type Enquiry = EnquiryInput & {
   id: string;
   source: "app" | "website";
   status: EnquiryStatus;
   createdAt: string;
+  respondBy: string; // the team promises a call back by this time
+  order?: Order;
 };
+
+// What the customer needs to look up their own enquiry
+export type EnquiryRef = { id: string; phone: string };

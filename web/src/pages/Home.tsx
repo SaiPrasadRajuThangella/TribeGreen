@@ -32,7 +32,7 @@ const STEPS = [
   },
   {
     icon: Send,
-    title: "Get a quote in 48 hrs",
+    title: "A call back in 2 hrs",
     body: "Our gifting team calls back with pricing for your quantity and dates.",
   },
   {
@@ -95,7 +95,7 @@ export default function Home() {
             <dl className="mt-10 grid max-w-md grid-cols-3 gap-4">
               {[
                 ["500+", "brands gifted"],
-                ["48 hrs", "quote turnaround"],
+                ["2 hrs", "call-back time"],
                 ["10 units", "minimum order"],
               ].map(([value, label]) => (
                 <div key={label}>
@@ -269,7 +269,7 @@ export default function Home() {
               Planning Diwali gifts for 2026?
             </h2>
             <p className="mt-3 max-w-md text-ink-soft">
-              Share your headcount and budget. We'll put together a festive shortlist within 48 hours.
+              Share your headcount and budget. We'll call you back with a festive shortlist within 2 hours.
             </p>
             <ButtonLink to="/enquiry" variant="dark" iconRight={ArrowRight} className="mt-7">
               Start an enquiry

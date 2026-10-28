@@ -7,6 +7,7 @@ import { GENERAL_WHATSAPP_MESSAGE, productWhatsAppMessage, whatsappUrl } from "@
 
 import { Footer } from "./Footer";
 import { Header } from "./Header";
+import { ItemSheet } from "./ItemSheet";
 import { ListDrawer } from "./ListDrawer";
 
 export function SiteLayout() {
@@ -25,6 +26,7 @@ export function SiteLayout() {
       <Footer />
       <FloatingWhatsApp />
       <ListDrawer />
+      <ItemSheet />
       <ScrollRestoration />
     </div>
   );

@@ -1,10 +1,13 @@
-import { ArrowRight, Check, MessageCircle } from "lucide-react";
+import { ArrowRight, Check, Clock, MessageCircle, PackageSearch } from "lucide-react";
 import { motion } from "motion/react";
-import { useLocation, useParams } from "react-router";
+import { Link, useLocation, useParams } from "react-router";
 
 import { ButtonLink } from "@/components/ui";
 import { getBudgetBand, OCCASION_META } from "@/data/catalog";
 import { useSeo } from "@/hooks/useSeo";
+import { REPLY_WITHIN_HOURS } from "@/lib/config";
+import { describeVariants } from "@/lib/items";
+import { formatTime } from "@/lib/time";
 import { whatsappUrl } from "@/lib/whatsapp";
 import type { Enquiry } from "@/types";
 
@@ -14,8 +17,7 @@ export default function ThankYou() {
 
   useSeo({
     title: "Enquiry sent",
-    description:
-      "Thank you for your enquiry. The Tribe Green gifting team will get back to you within 48 hours.",
+    description: `Thank you for your enquiry. The Tribe Green gifting team will call you back within ${REPLY_WITHIN_HOURS} hours.`,
     noindex: true,
   });
 
@@ -47,8 +49,13 @@ export default function ThankYou() {
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Enquiry sent!</h1>
         <p className="mt-3 text-muted">
           Thank you{enquiry ? `, ${enquiry.name.split(" ")[0]}` : ""}. Our gifting team will call you with a
-          tailored quote within 48 hours.
+          tailored quote within {REPLY_WITHIN_HOURS} hours.
         </p>
+        {enquiry ? (
+          <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-lime-soft px-4 py-2 text-sm font-semibold text-lime-ink">
+            <Clock size={16} /> Expect a call by {formatTime(enquiry.respondBy)}
+          </p>
+        ) : null}
       </motion.div>
 
       {enquiry ? (
@@ -59,8 +66,23 @@ export default function ThankYou() {
           className="mt-8 w-full max-w-md rounded-[28px] bg-card p-6 text-left text-sm"
         >
           <Row label="Reference" value={enquiry.id} strong />
-          <Row label="Gifts" value={enquiry.products.map((p) => p.name).join(", ")} />
-          <Row label="Units" value={enquiry.units.toLocaleString("en-IN")} />
+          <div className="border-t border-line py-3">
+            <dt className="mb-2 text-muted">Gifts</dt>
+            <dd className="space-y-2">
+              {enquiry.products.map((p) => (
+                <div key={p.id} className="flex justify-between gap-4">
+                  <span className="min-w-0">
+                    <span className="block font-semibold">{p.name}</span>
+                    {p.variants?.length ? (
+                      <span className="text-xs text-muted">{describeVariants(p.variants)}</span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 font-semibold tabular-nums">{p.units} units</span>
+                </div>
+              ))}
+            </dd>
+          </div>
+          <Row label="Total units" value={enquiry.units.toLocaleString("en-IN")} />
           <Row label="Occasion" value={OCCASION_META[enquiry.occasion].short} />
           <Row label="Budget" value={`${getBudgetBand(enquiry.budget)?.label} / unit`} />
         </motion.dl>
@@ -71,6 +93,9 @@ export default function ThankYou() {
       ) : null}
 
       <div className="mt-8 flex flex-wrap justify-center gap-3">
+        <ButtonLink to="/orders" variant="dark" icon={PackageSearch}>
+          Track in My orders
+        </ButtonLink>
         <a
           href={whatsappUrl(`Hi Tribe Green! I just sent enquiry ${id ?? ""} from your website.`)}
           target="_blank"
@@ -79,10 +104,13 @@ export default function ThankYou() {
         >
           <MessageCircle size={18} className="text-whatsapp" /> Chat on WhatsApp
         </a>
-        <ButtonLink to="/catalogue" variant="dark" iconRight={ArrowRight}>
-          Keep browsing
-        </ButtonLink>
       </div>
+      <Link
+        to="/catalogue"
+        className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink"
+      >
+        Keep browsing <ArrowRight size={15} />
+      </Link>
     </div>
   );
 }

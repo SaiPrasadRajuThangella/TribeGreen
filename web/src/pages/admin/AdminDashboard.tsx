@@ -1,5 +1,6 @@
 import {
   CalendarDays,
+  Clock,
   Download,
   ExternalLink,
   Gift,
@@ -7,6 +8,7 @@ import {
   LogOut,
   Mail,
   MessageCircle,
+  PackageCheck,
   Phone,
   RefreshCw,
   Search,
@@ -18,12 +20,17 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 import { Button } from "@/components/ui";
-import { getBudgetBand, OCCASION_META } from "@/data/catalog";
+import { formatINR, getBudgetBand, OCCASION_META } from "@/data/catalog";
+import { useNow } from "@/hooks/useNow";
+import { useProducts } from "@/hooks/useProducts";
 import { useSeo } from "@/hooks/useSeo";
-import { ApiError, getEnquiries, updateEnquiryStatus } from "@/lib/api";
+import { ApiError, finaliseOrder, getEnquiries, updateEnquiryStatus, updateOrder } from "@/lib/api";
+import { REPLY_WITHIN_HOURS } from "@/lib/config";
 import { downloadCsv } from "@/lib/csv";
+import { describeVariants } from "@/lib/items";
+import { formatDay, formatTime, replyWindow } from "@/lib/time";
 import { useAuth } from "@/store";
-import type { Enquiry, EnquiryStatus } from "@/types";
+import { type Enquiry, type EnquiryStatus, ORDER_STAGES, type OrderItem, type OrderStage } from "@/types";
 
 const STATUSES: EnquiryStatus[] = ["New", "Contacted", "Converted", "Lost"];
 
@@ -58,6 +65,7 @@ export default function AdminDashboard() {
   const [source, setSource] = useState<SourceFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const now = useNow();
 
   const logout = useCallback(() => {
     setToken(null);
@@ -111,6 +119,19 @@ export default function AdminDashboard() {
     [enquiries, token, logout],
   );
 
+  const replaceEnquiry = useCallback((updated: Enquiry, message: string) => {
+    setEnquiries((list) => list.map((e) => (e.id === updated.id ? updated : e)));
+    setToast(message);
+  }, []);
+
+  const showError = useCallback(
+    (err: unknown) => {
+      if (err instanceof ApiError && err.status === 401) return logout();
+      setToast((err as Error).message);
+    },
+    [logout],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return enquiries
@@ -131,12 +152,14 @@ export default function AdminDashboard() {
     return {
       total: enquiries.length,
       new: by("New"),
+      overdue: enquiries.filter((e) => e.status === "New" && replyWindow(e.respondBy, now).overdue).length,
+      activeOrders: enquiries.filter((e) => e.order && e.order.stage !== "Delivered").length,
       converted: by("Converted"),
       rate: enquiries.length ? Math.round((by("Converted") / enquiries.length) * 100) : 0,
       app,
       website: enquiries.length - app,
     };
-  }, [enquiries]);
+  }, [enquiries, now]);
 
   const selected = enquiries.find((e) => e.id === selectedId) ?? null;
 
@@ -191,8 +214,21 @@ export default function AdminDashboard() {
         {/* Stats */}
         <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Stat label="Total enquiries" value={stats.total} />
-          <Stat label="New, not contacted" value={stats.new} highlight />
-          <Stat label="Converted" value={stats.converted} hint={`${stats.rate}% conversion`} />
+          <Stat
+            label="New, not contacted"
+            value={stats.new}
+            highlight
+            hint={
+              stats.overdue
+                ? `${stats.overdue} past the ${REPLY_WITHIN_HOURS}-hour promise`
+                : `Call back within ${REPLY_WITHIN_HOURS} hours`
+            }
+          />
+          <Stat
+            label="Converted"
+            value={stats.converted}
+            hint={`${stats.rate}% conversion · ${stats.activeOrders} active ${stats.activeOrders === 1 ? "order" : "orders"}`}
+          />
           <Stat label="Website / App" value={`${stats.website} / ${stats.app}`} />
         </div>
 
@@ -261,7 +297,7 @@ export default function AdminDashboard() {
                 </thead>
                 <tbody className="divide-y divide-line">
                   {filtered.map((e) => (
-                    <Row key={e.id} enquiry={e} onOpen={setSelectedId} onStatus={changeStatus} />
+                    <Row key={e.id} enquiry={e} now={now} onOpen={setSelectedId} onStatus={changeStatus} />
                   ))}
                 </tbody>
               </table>
@@ -283,9 +319,11 @@ export default function AdminDashboard() {
                     <p className="mt-1 text-xs text-muted">
                       {e.units} units · {formatDate(e.createdAt)}
                     </p>
+                    <ReplyBadge enquiry={e} now={now} />
                   </button>
-                  <div className="mt-3">
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
                     <StatusSelect id={e.id} value={e.status} onChange={changeStatus} />
+                    <OrderHint enquiry={e} />
                   </div>
                 </li>
               ))}
@@ -297,7 +335,15 @@ export default function AdminDashboard() {
         )}
       </main>
 
-      <DetailDrawer enquiry={selected} onClose={() => setSelectedId(null)} onStatus={changeStatus} />
+      <DetailDrawer
+        enquiry={selected}
+        token={token}
+        now={now}
+        onClose={() => setSelectedId(null)}
+        onStatus={changeStatus}
+        onSaved={replaceEnquiry}
+        onError={showError}
+      />
 
       <AnimatePresence>
         {toast ? (
@@ -318,10 +364,12 @@ export default function AdminDashboard() {
 
 const Row = memo(function Row({
   enquiry: e,
+  now,
   onOpen,
   onStatus,
 }: {
   enquiry: Enquiry;
+  now: number;
   onOpen: (id: string) => void;
   onStatus: (id: string, s: EnquiryStatus) => void;
 }) {
@@ -341,9 +389,16 @@ const Row = memo(function Row({
       <td className="px-3 py-4">
         <SourceBadge source={e.source} />
       </td>
-      <td className="px-3 py-4 whitespace-nowrap text-muted">{formatDate(e.createdAt)}</td>
+      <td className="px-3 py-4 whitespace-nowrap text-muted">
+        {formatDate(e.createdAt)}
+        <br />
+        <ReplyBadge enquiry={e} now={now} />
+      </td>
       <td className="px-5 py-4" onClick={(ev) => ev.stopPropagation()}>
         <StatusSelect id={e.id} value={e.status} onChange={onStatus} />
+        <div className="mt-1.5">
+          <OrderHint enquiry={e} />
+        </div>
       </td>
     </tr>
   );
@@ -372,6 +427,37 @@ function StatusSelect({
       ))}
     </select>
   );
+}
+
+// The 2-hour call-back promise, for enquiries nobody has called yet
+function ReplyBadge({ enquiry, now }: { enquiry: Enquiry; now: number }) {
+  if (enquiry.status !== "New") return null;
+  const { overdue, label } = replyWindow(enquiry.respondBy, now);
+  return (
+    <span
+      className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+        overdue ? "bg-danger-soft text-danger" : "bg-lime-soft text-lime-ink"
+      }`}
+    >
+      <Clock size={11} /> {overdue ? `Overdue by ${label}` : `Call within ${label}`}
+    </span>
+  );
+}
+
+function OrderHint({ enquiry }: { enquiry: Enquiry }) {
+  if (enquiry.order) {
+    return (
+      <span className="text-[11px] whitespace-nowrap text-muted">
+        {enquiry.order.stage} · due {formatDay(enquiry.order.expectedDelivery)}
+      </span>
+    );
+  }
+  if (enquiry.status === "Converted") {
+    return (
+      <span className="text-[11px] font-semibold whitespace-nowrap text-danger">Finalise the order</span>
+    );
+  }
+  return null;
 }
 
 function SourceBadge({ source }: { source: Enquiry["source"] }) {
@@ -443,12 +529,21 @@ function Segmented<T extends string>({
   );
 }
 
+type SaveHandlers = {
+  token: string;
+  onSaved: (enquiry: Enquiry, message: string) => void;
+  onError: (err: unknown) => void;
+};
+
 function DetailDrawer({
   enquiry,
+  now,
   onClose,
   onStatus,
-}: {
+  ...handlers
+}: SaveHandlers & {
   enquiry: Enquiry | null;
+  now: number;
   onClose: () => void;
   onStatus: (id: string, s: EnquiryStatus) => void;
 }) {
@@ -537,24 +632,45 @@ function DetailDrawer({
                 />
                 <Detail label="Customisation" value={enquiry.customisations.join(", ") || "None"} />
                 <Detail label="Received" value={formatDate(enquiry.createdAt)} />
+                <Detail
+                  label="Call back by"
+                  value={
+                    <span className="inline-flex flex-col items-end gap-0.5">
+                      {formatTime(enquiry.respondBy)}
+                      <ReplyBadge enquiry={enquiry} now={now} />
+                    </span>
+                  }
+                />
               </dl>
 
               <div className="rounded-[24px] bg-card p-5">
                 <p className="mb-3 text-sm font-semibold">Gifts</p>
-                <ul className="space-y-1.5 text-sm">
+                <ul className="divide-y divide-line text-sm">
                   {enquiry.products.map((p) => (
-                    <li key={p.id}>
-                      <Link
-                        to={`/product/${p.id}`}
-                        target="_blank"
-                        className="underline-offset-4 hover:underline"
-                      >
-                        {p.name}
-                      </Link>
+                    <li key={p.id} className="flex justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
+                      <span className="min-w-0">
+                        <Link
+                          to={`/product/${p.id}`}
+                          target="_blank"
+                          className="font-medium underline-offset-4 hover:underline"
+                        >
+                          {p.name}
+                        </Link>
+                        {p.variants?.length ? (
+                          <span className="block text-xs text-muted">{describeVariants(p.variants)}</span>
+                        ) : null}
+                      </span>
+                      <span className="shrink-0 font-semibold tabular-nums">{p.units} units</span>
                     </li>
                   ))}
                 </ul>
               </div>
+
+              {enquiry.order ? (
+                <ManageOrder key={enquiry.id} enquiry={enquiry} {...handlers} />
+              ) : (
+                <FinaliseOrder key={enquiry.id} enquiry={enquiry} {...handlers} />
+              )}
 
               {enquiry.message ? (
                 <div className="rounded-[24px] bg-card p-5">
@@ -588,6 +704,231 @@ function Detail({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex justify-between gap-6 py-3">
       <dt className="text-muted">{label}</dt>
       <dd className="text-right font-medium">{value}</dd>
+    </div>
+  );
+}
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+const fieldCls =
+  "h-11 w-full rounded-xl border border-line bg-canvas px-3 text-sm outline-none transition focus:border-ink focus:bg-card";
+
+const orderTotal = (items: OrderItem[]) => items.reduce((sum, i) => sum + i.units * i.unitPrice, 0);
+
+// Quote agreed: set the price per unit and the delivery date, and it becomes the customer's order
+function FinaliseOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { enquiry: Enquiry }) {
+  const { byId } = useProducts();
+  const [prices, setPrices] = useState<Record<string, string> | null>(null);
+  const [eta, setEta] = useState(enquiry.deliveryDate);
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Start from the catalogue's lowest price for each gift
+  const start = () =>
+    setPrices(
+      Object.fromEntries(enquiry.products.map((p) => [p.id, String(byId.get(p.id)?.priceMin ?? "")])),
+    );
+
+  if (!prices) {
+    return (
+      <div className="rounded-[24px] bg-lime p-5">
+        <p className="font-bold">Quote agreed?</p>
+        <p className="mt-1 text-sm text-ink-soft">
+          Add the final price per unit and a delivery date. The customer then sees the order and when it
+          arrives on their My orders page.
+        </p>
+        <Button variant="dark" size="md" icon={PackageCheck} className="mt-4" onClick={start}>
+          Finalise order
+        </Button>
+      </div>
+    );
+  }
+
+  const items: OrderItem[] = enquiry.products.map((p) => ({ ...p, unitPrice: Number(prices[p.id]) || 0 }));
+  const valid = items.every((i) => i.unitPrice > 0) && eta >= today();
+
+  const confirm = async () => {
+    setSaving(true);
+    try {
+      const updated = await finaliseOrder(token, enquiry.id, {
+        items,
+        expectedDelivery: eta,
+        note: note.trim(),
+      });
+      onSaved(updated, `${enquiry.id} confirmed as an order`);
+    } catch (err) {
+      onError(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-[24px] bg-card p-5">
+      <p className="font-bold">Finalise order</p>
+      <p className="mt-0.5 mb-4 text-xs text-muted">Final price per unit, including customisation</p>
+      <ul className="space-y-3">
+        {items.map((i) => (
+          <li key={i.id} className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{i.name}</p>
+              <p className="text-xs text-muted">
+                {i.variants?.length ? `${describeVariants(i.variants)} · ` : ""}
+                {i.units} units
+              </p>
+            </div>
+            <label className="flex h-10 w-28 shrink-0 items-center gap-1 rounded-xl border border-line bg-canvas px-3 focus-within:border-ink">
+              <span className="text-sm text-muted">₹</span>
+              <input
+                inputMode="numeric"
+                aria-label={`Price per unit for ${i.name}`}
+                value={prices[i.id]}
+                onChange={(e) => setPrices({ ...prices, [i.id]: e.target.value.replace(/\D/g, "") })}
+                className="w-full min-w-0 bg-transparent text-sm font-semibold tabular-nums outline-none"
+              />
+            </label>
+          </li>
+        ))}
+      </ul>
+
+      <label className="mt-5 block">
+        <span className="mb-1.5 block text-sm font-semibold">Delivery date</span>
+        <input
+          type="date"
+          min={today()}
+          value={eta}
+          onChange={(e) => setEta(e.target.value)}
+          className={fieldCls}
+        />
+      </label>
+      <label className="mt-4 block">
+        <span className="mb-1.5 block text-sm font-semibold">
+          Note for the customer <span className="font-normal text-faint">(optional)</span>
+        </span>
+        <textarea
+          rows={2}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Mock-ups approved, production starts Monday."
+          className={`${fieldCls} h-auto resize-none py-2.5`}
+        />
+      </label>
+
+      <div className="mt-5 flex items-center justify-between border-t border-line pt-4">
+        <span className="text-sm text-muted">Order total</span>
+        <span className="text-lg font-extrabold tabular-nums">{formatINR(orderTotal(items))}</span>
+      </div>
+      <div className="mt-4 flex gap-2">
+        <Button variant="outline" size="md" onClick={() => setPrices(null)}>
+          Cancel
+        </Button>
+        <Button
+          variant="dark"
+          size="md"
+          icon={PackageCheck}
+          className="flex-1"
+          loading={saving}
+          disabled={!valid}
+          onClick={confirm}
+        >
+          Confirm order
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// After confirmation: move the order through production and delivery
+function ManageOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { enquiry: Enquiry }) {
+  const order = enquiry.order!;
+  const [stage, setStage] = useState<OrderStage>(order.stage);
+  const [eta, setEta] = useState(order.expectedDelivery);
+  const [note, setNote] = useState(order.note);
+  const [saving, setSaving] = useState(false);
+  const dirty = stage !== order.stage || eta !== order.expectedDelivery || note !== order.note;
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const updated = await updateOrder(token, enquiry.id, {
+        stage,
+        expectedDelivery: eta,
+        note: note.trim(),
+      });
+      onSaved(updated, stage !== order.stage ? `${enquiry.id} moved to ${stage}` : `${enquiry.id} updated`);
+    } catch (err) {
+      onError(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-[24px] bg-card p-5">
+      <div className="flex items-baseline justify-between">
+        <p className="font-bold">Order</p>
+        <p className="text-lg font-extrabold tabular-nums">{formatINR(order.total)}</p>
+      </div>
+      <p className="mt-0.5 text-xs text-muted">Confirmed {formatDate(order.confirmedAt)}</p>
+
+      <div
+        role="radiogroup"
+        aria-label="Order stage"
+        className="mt-4 grid grid-cols-4 gap-1 rounded-2xl bg-canvas p-1"
+      >
+        {ORDER_STAGES.map((s) => (
+          <button
+            key={s}
+            type="button"
+            role="radio"
+            aria-checked={stage === s}
+            onClick={() => setStage(s)}
+            className={`rounded-xl px-1 py-2 text-[11px] leading-tight font-semibold transition ${
+              stage === s ? "bg-ink text-white" : "text-muted hover:text-ink"
+            }`}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
+      <label className="mt-4 block">
+        <span className="mb-1.5 block text-sm font-semibold">Delivery date</span>
+        <input type="date" value={eta} onChange={(e) => setEta(e.target.value)} className={fieldCls} />
+      </label>
+      <label className="mt-4 block">
+        <span className="mb-1.5 block text-sm font-semibold">
+          Note for the customer <span className="font-normal text-faint">(courier, tracking number)</span>
+        </span>
+        <textarea
+          rows={2}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className={`${fieldCls} h-auto resize-none py-2.5`}
+        />
+      </label>
+
+      <ul className="mt-4 divide-y divide-line border-t border-line text-sm">
+        {order.items.map((i) => (
+          <li key={i.id} className="flex justify-between gap-3 py-2.5">
+            <span className="min-w-0 truncate">{i.name}</span>
+            <span className="shrink-0 text-muted tabular-nums">
+              {i.units} × {formatINR(i.unitPrice)}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <Button
+        variant="dark"
+        size="md"
+        className="mt-2 w-full"
+        loading={saving}
+        disabled={!dirty || !eta}
+        onClick={save}
+      >
+        Save and update customer
+      </Button>
     </div>
   );
 }

@@ -1,23 +1,22 @@
-import { ArrowRight, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
+import { ArrowRight, ShoppingBag, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo } from "react";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 
-import { formatINR, formatPriceRange } from "@/data/catalog";
+import { formatINR } from "@/data/catalog";
 import { useProducts } from "@/hooks/useProducts";
+import { useScrollLock } from "@/hooks/useScrollLock";
+import { quantityProblem } from "@/lib/items";
 import { useEnquiryList } from "@/store";
 
+import { GiftRow } from "./GiftRow";
 import { Button } from "./ui";
-
-const STEP = 5;
 
 // Slide-over panel with everything the visitor added for a quote
 export function ListDrawer() {
   const open = useEnquiryList((s) => s.open);
   const setOpen = useEnquiryList((s) => s.setOpen);
   const items = useEnquiryList((s) => s.items);
-  const setUnits = useEnquiryList((s) => s.setUnits);
-  const remove = useEnquiryList((s) => s.remove);
   const { byId } = useProducts();
   const navigate = useNavigate();
 
@@ -41,15 +40,16 @@ export function ListDrawer() {
     [rows],
   );
 
+  const needsAttention = rows.some(({ item, product }) => quantityProblem(product, item));
+
+  useScrollLock(open);
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    // Escape closes the size picker first when it is open on top
+    const onKey = (e: KeyboardEvent) =>
+      e.key === "Escape" && !useEnquiryList.getState().editing && setOpen(false);
     document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, setOpen]);
 
   return (
@@ -115,62 +115,8 @@ export function ListDrawer() {
                 <ul className="flex-1 space-y-3 overflow-y-auto px-6 pb-4">
                   <AnimatePresence initial={false}>
                     {rows.map(({ item, product }) => (
-                      <motion.li
-                        key={product.id}
-                        layout
-                        exit={{ opacity: 0, x: 40 }}
-                        className="flex gap-3 rounded-3xl bg-card p-2.5"
-                      >
-                        <Link
-                          to={`/product/${product.id}`}
-                          onClick={() => setOpen(false)}
-                          className="shrink-0"
-                        >
-                          <img
-                            src={product.images[0]}
-                            alt=""
-                            className="size-20 rounded-2xl bg-soft object-cover"
-                          />
-                        </Link>
-                        <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold">{product.name}</p>
-                              <p className="text-xs text-muted">{formatPriceRange(product)} / unit</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => remove(product.id)}
-                              aria-label={`Remove ${product.name}`}
-                              className="grid size-8 shrink-0 place-items-center rounded-full text-muted hover:bg-danger-soft hover:text-danger"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center rounded-full bg-soft p-1">
-                              <Stepper
-                                label="Decrease units"
-                                disabled={item.units <= product.minOrder}
-                                onClick={() =>
-                                  setUnits(product.id, Math.max(product.minOrder, item.units - STEP))
-                                }
-                              >
-                                <Minus size={13} strokeWidth={2.5} />
-                              </Stepper>
-                              <span className="min-w-11 text-center text-sm font-bold tabular-nums">
-                                {item.units}
-                              </span>
-                              <Stepper
-                                label="Increase units"
-                                onClick={() => setUnits(product.id, item.units + STEP)}
-                              >
-                                <Plus size={13} strokeWidth={2.5} />
-                              </Stepper>
-                            </div>
-                            <span className="text-xs text-faint">units</span>
-                          </div>
-                        </div>
+                      <motion.li key={product.id} layout exit={{ opacity: 0, x: 40 }}>
+                        <GiftRow item={item} product={product} onNavigate={() => setOpen(false)} />
                       </motion.li>
                     ))}
                   </AnimatePresence>
@@ -190,6 +136,11 @@ export function ListDrawer() {
                       <span className="text-xs text-muted">up to {formatINR(totals.max)}</span>
                     </span>
                   </div>
+                  {needsAttention ? (
+                    <p className="mt-3 text-xs text-danger">
+                      Finish choosing quantities for the marked gifts.
+                    </p>
+                  ) : null}
                   <Button
                     variant="dark"
                     iconRight={ArrowRight}
@@ -208,29 +159,5 @@ export function ListDrawer() {
         </div>
       ) : null}
     </AnimatePresence>
-  );
-}
-
-function Stepper({
-  label,
-  onClick,
-  disabled,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      disabled={disabled}
-      className="grid size-7 place-items-center rounded-full bg-card transition active:scale-90 disabled:opacity-40"
-    >
-      {children}
-    </button>
   );
 }

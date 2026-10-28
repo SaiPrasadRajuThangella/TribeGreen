@@ -7,3 +7,6 @@ export const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || "91987654
 
 export const SITE_URL = (import.meta.env.VITE_SITE_URL || "https://tribegreen.vercel.app").replace(/\/$/, "");
 export const SITE_NAME = "Tribe Green";
+
+// The sales team promises to call back within this many hours of an enquiry
+export const REPLY_WITHIN_HOURS = 2;

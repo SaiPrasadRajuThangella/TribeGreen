@@ -5,6 +5,7 @@ import Catalogue from "@/pages/Catalogue";
 import Enquiry from "@/pages/Enquiry";
 import Home from "@/pages/Home";
 import NotFound from "@/pages/NotFound";
+import Orders from "@/pages/Orders";
 import Product from "@/pages/Product";
 import ThankYou from "@/pages/ThankYou";
 
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
       { path: "product/:id", Component: Product },
       { path: "enquiry", Component: Enquiry },
       { path: "thank-you/:id", Component: ThankYou },
+      { path: "orders", Component: Orders },
       { path: "*", Component: NotFound },
     ],
   },

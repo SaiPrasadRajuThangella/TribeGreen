@@ -47,3 +47,13 @@ export const formatINR = (value: number) => `₹${value.toLocaleString("en-IN")}
 
 export const formatPriceRange = (p: Pick<Product, "priceMin" | "priceMax">) =>
   `${formatINR(p.priceMin)} – ${formatINR(p.priceMax)}`;
+
+export const COLOUR_SWATCH: Record<string, string> = {
+  Black: "#1C1C1C",
+  White: "#F7F7F4",
+  Sage: "#9CAF88",
+  Navy: "#1F2A44",
+  Beige: "#D9C7A7",
+  Lavender: "#B9A7D6",
+  Charcoal: "#3D3F42",
+};
