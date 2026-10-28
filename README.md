@@ -32,13 +32,20 @@ Open http://localhost:5173.
 | Page | Path | What it does |
 |---|---|---|
 | Home | `/` | Hero, categories, bestsellers, gift by occasion, how it works |
-| Catalogue | `/catalogue` | Search, sort, and filters by category, occasion and budget. Filters live in the URL, so a filtered view can be shared |
-| Product | `/product/:id` | Photo, price range, quantity estimate, occasions, customisation, WhatsApp button with a pre-filled message about the product |
-| Enquiry list | drawer | Products picked for one quote, with units and an estimated budget |
-| Enquiry form | `/enquiry` | All brief fields, validated (phone, email, quantity, date) |
-| Thank you | `/thank-you/:id` | Confirmation with the enquiry reference |
+| Catalogue | `/catalogue` | Search, sort, and filters by occasion, budget and category (one, several or all, e.g. `?category=Drinkware&category=Apparel`). Filters live in the URL, so a filtered view can be shared |
+| Product | `/product/:id` | Photo, price range, quantity with a live estimate, occasions, customisation, WhatsApp button with a pre-filled message about the product. Clothes take units per size and some gifts per colour (10 M + 10 L) |
+| Enquiry list | drawer | Products picked for one quote, with units or the size / colour split, and an estimated budget |
+| Enquiry form | `/enquiry` | All brief fields, validated (phone, email, quantity, date). The form is saved as you type, so a trip to the catalogue to add more gifts keeps it |
+| Thank you | `/thank-you/:id` | Confirmation with the enquiry reference and the call-back time (within 2 hours) |
+| My orders | `/orders` | Enquiries sent from this browser: a countdown to the 2-hour call back, then, once the admin confirms the order, the items, prices, progress and delivery date. Another device's order can be added with its reference and phone number |
 | Admin login | `/admin/login` | Sign in to the admin page |
-| Admin | `/admin` | All enquiries from the website and the app, with source, status (New, Contacted, Converted, Lost), search, filters, a details panel and CSV download |
+| Admin | `/admin` | All enquiries from the website and the app, with source, status (New, Contacted, Converted, Lost), a 2-hour call-back timer, search, filters, a details panel and CSV download. From the details panel the admin finalises an order (price per unit, delivery date, note) and moves it through Confirmed, In production, Dispatched and Delivered |
+
+### Quantities
+
+- Every gift starts at **10 units**.
+- Gifts with sizes (hoodie, polo) or colours (bottle, cap, yoga kit) are ordered per variant, and the variants add up to the total. Adding one from the catalogue opens a picker.
+- The enquiry stores each gift as `{ id, name, units, variants?: [{ label, units }] }`.
 
 ### Page title, description and share image
 
@@ -50,10 +57,22 @@ Open http://localhost:5173.
 Until the backend is connected, the site runs on mock data:
 
 - Products come from `web/src/data/products.ts`.
-- Enquiries are saved in the browser's localStorage, which is seeded with sample enquiries from both the app and the website.
+- Enquiries and orders are saved in the browser's localStorage, which is seeded with sample enquiries from both the app and the website. The admin page and My orders read the same storage, so an order confirmed in the admin tab shows up on My orders straight away.
+- To try the order lookup, use the sample order `TG-5RT9LP` with its phone number from `web/src/lib/mockDb.ts`.
 - **Admin demo login:** username `admin`, password `tribegreen`. This works only in demo mode; the backend will check its own credentials.
 
-To use the real API, copy `web/.env.example` to `web/.env` and set `VITE_API_URL`.
+To use the real API, copy `web/.env.example` to `web/.env` and set `VITE_API_URL`. The site then calls:
+
+| Method | Path | Used for |
+|---|---|---|
+| GET | `/api/products`, `/api/products/:id` | Catalogue |
+| POST | `/api/enquiries` | Send an enquiry (`source: "website"`). Returns it with `id` and `respondBy` (2 hours later) |
+| POST | `/api/enquiries/track` | `{ refs: [{ id, phone }] }` → the matching enquiries with their orders, for My orders |
+| POST | `/api/admin/login` | `{ username, password }` → `{ token }` |
+| GET | `/api/admin/enquiries` | All enquiries (Bearer token) |
+| PATCH | `/api/admin/enquiries/:id` | `{ status }` |
+| POST | `/api/admin/enquiries/:id/order` | Finalise: `{ items (with unitPrice), expectedDelivery, note }`, sets the status to Converted |
+| PATCH | `/api/admin/enquiries/:id/order` | `{ stage?, expectedDelivery?, note? }` |
 
 ### Deploying to Vercel
 
