@@ -1,5 +1,8 @@
 import type { Product, ProductOption } from "@/types";
 
+// The live catalogue comes from the API (seeded from backend/src/data/products.ts).
+// This copy is only read at build time, to write each product page's share tags, and for MIN_ORDER.
+
 // Every gift can be ordered from 10 units
 export const MIN_ORDER = 10;
 

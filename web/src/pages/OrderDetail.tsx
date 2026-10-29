@@ -8,7 +8,7 @@ import { ButtonLink } from "@/components/ui";
 import { CUSTOMISATION_META, formatINR, getBudgetBand } from "@/data/catalog";
 import { useNow } from "@/hooks/useNow";
 import { useSeo } from "@/hooks/useSeo";
-import { useTrackedEnquiries } from "@/hooks/useTrackedEnquiries";
+import { useOrdersFeed } from "@/hooks/useOrdersFeed";
 import { customerStatus } from "@/lib/orderStatus";
 import { daysUntil, formatDate, formatDay, formatTime, relativeDays, replyWindow } from "@/lib/time";
 import { formatPhone } from "@/lib/validation";
@@ -120,7 +120,7 @@ function buildSteps(e: Enquiry, now: number): Step[] {
 
 export default function OrderDetail() {
   const { id = "" } = useParams();
-  const { enquiries, loading } = useTrackedEnquiries();
+  const { enquiries, loading } = useOrdersFeed();
   const now = useNow();
   const e = enquiries.find((x) => x.id === id);
 
@@ -146,9 +146,9 @@ export default function OrderDetail() {
         <div className="mb-5 grid size-20 place-items-center rounded-full bg-lime-soft">
           <PackageSearch size={30} className="text-lime-ink" strokeWidth={1.8} />
         </div>
-        <p className="text-lg font-bold">We can't find {id} on this device</p>
+        <p className="text-lg font-bold">We can't find {id} on your account</p>
         <p className="mt-1.5 mb-6 max-w-sm text-sm text-muted">
-          Add it on My orders with its reference or the mobile number you used.
+          Orders show up for the mobile number they were made with. Check you're signed in with that number.
         </p>
         <ButtonLink to="/orders" variant="dark" size="md">
           Go to My orders

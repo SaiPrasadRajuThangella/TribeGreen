@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getProducts } from "@/lib/api";
 import type { Product } from "@/types";
@@ -18,8 +18,7 @@ export function useProducts() {
   const [products, setProducts] = useState<Product[] | null>(cache);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (cache) return;
+  const fetchAll = useCallback(() => {
     let alive = true;
     load()
       .then((data) => alive && setProducts(data))
@@ -29,7 +28,18 @@ export function useProducts() {
     };
   }, []);
 
+  useEffect(() => {
+    if (cache) return;
+    return fetchAll();
+  }, [fetchAll]);
+
+  // After a failed load (e.g. the API was down), ask again
+  const retry = useCallback(() => {
+    setError(null);
+    fetchAll();
+  }, [fetchAll]);
+
   const byId = useMemo(() => new Map((products ?? []).map((p) => [p.id, p])), [products]);
 
-  return { products: products ?? [], byId, loading: !products && !error, error };
+  return { products: products ?? [], byId, loading: !products && !error, error, retry };
 }

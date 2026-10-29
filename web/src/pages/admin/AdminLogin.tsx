@@ -5,7 +5,6 @@ import { Navigate, useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui";
 import { useSeo } from "@/hooks/useSeo";
 import { adminLogin } from "@/lib/api";
-import { USE_MOCK } from "@/lib/config";
 import { useAuth } from "@/store";
 
 export default function AdminLogin() {
@@ -104,9 +103,9 @@ export default function AdminLogin() {
           Sign in
         </Button>
 
-        {USE_MOCK ? (
+        {import.meta.env.DEV ? (
           <p className="mt-5 text-center text-xs leading-5 text-faint">
-            Demo mode: the login details are in the project README.
+            Local development: the demo login is in backend/.env.example.
           </p>
         ) : null}
       </form>

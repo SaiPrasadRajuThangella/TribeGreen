@@ -1,9 +1,9 @@
-import { PRODUCTS } from "@/data/products";
+import { useCustomer } from "@/store";
 import type {
+  Customer,
+  CustomerProfile,
   Enquiry,
   EnquiryInput,
-  EnquiryLookup,
-  EnquiryRef,
   EnquiryStatus,
   OrderChanges,
   OrderDraft,
@@ -11,135 +11,95 @@ import type {
 } from "@/types";
 
 import { ApiError } from "./apiError";
-import { API_URL, USE_MOCK } from "./config";
-import { MOCK_ADMIN, MOCK_TOKEN, mockDb } from "./mockDb";
-
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+import { API_URL } from "./config";
 
 export { ApiError };
 
-async function request<T>(path: string, init: RequestInit & { token?: string } = {}): Promise<T> {
+async function request<T>(path: string, init: RequestInit & { token?: string | null } = {}): Promise<T> {
   const { token, ...rest } = init;
-  const res = await fetch(`${API_URL}${path}`, {
-    ...rest,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...rest.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...rest,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...rest.headers,
+      },
+    });
+  } catch {
+    throw new ApiError("Can't reach Tribe Green right now. Check your connection and try again.", 0);
+  }
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(body?.message ?? "Something went wrong. Try again.", res.status);
   return body as T;
 }
 
-/* ---------- Public ---------- */
-
-export async function getProducts(): Promise<Product[]> {
-  if (USE_MOCK) return PRODUCTS;
-  return request<Product[]>("/api/products");
-}
-
-export async function createEnquiry(input: EnquiryInput): Promise<Enquiry> {
-  if (USE_MOCK) {
-    await wait(700);
-    return mockDb.create(input);
+// Calls made as the signed-in customer. An expired session signs them out.
+async function asCustomer<T>(path: string, init: RequestInit = {}): Promise<T> {
+  try {
+    return await request<T>(path, { ...init, token: useCustomer.getState().token });
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) useCustomer.getState().signOut();
+    throw err;
   }
-  return request<Enquiry>("/api/enquiries", {
-    method: "POST",
-    body: JSON.stringify({ ...input, source: "website" }),
-  });
 }
 
-// The customer's own enquiries and orders, matched by reference + phone number
-export async function trackEnquiries(refs: EnquiryRef[]): Promise<Enquiry[]> {
-  if (!refs.length) return [];
-  if (USE_MOCK) {
-    await wait(250);
-    return mockDb.track(refs);
-  }
-  return request<Enquiry[]>("/api/enquiries/track", { method: "POST", body: JSON.stringify({ refs }) });
-}
+const json = (method: string, body: unknown) => ({ method, body: JSON.stringify(body) });
 
-// Track form: a reference finds that enquiry, a mobile number finds every enquiry made with it
-export async function findEnquiries(lookup: EnquiryLookup): Promise<Enquiry[]> {
-  if (USE_MOCK) {
-    await wait(350);
-    return mockDb.find(lookup);
-  }
-  return request<Enquiry[]>("/api/enquiries/lookup", { method: "POST", body: JSON.stringify(lookup) });
-}
+/* ---------- Catalogue ---------- */
 
-// The customer changes the number the team should call. The current number proves it's theirs
-export async function changeCallbackNumber(ref: EnquiryRef, phone: string): Promise<Enquiry> {
-  if (USE_MOCK) {
-    await wait(350);
-    return mockDb.changePhone(ref, phone);
-  }
-  return request<Enquiry>(`/api/enquiries/${ref.id}/phone`, {
-    method: "PATCH",
-    body: JSON.stringify({ phone: ref.phone, newPhone: phone }),
-  });
-}
+export const getProducts = () => request<Product[]>("/api/products");
+
+/* ---------- Customer sign-in: mobile number + 6-digit code ---------- */
+
+// demoCode comes back only while no SMS provider is connected
+export const requestCode = (phone: string) =>
+  request<{ sent: boolean; expiresInSeconds: number; demoCode?: string }>(
+    "/api/auth/otp",
+    json("POST", { phone }),
+  );
+
+export const verifyCode = (phone: string, code: string) =>
+  request<{ token: string; user: Customer }>("/api/auth/verify", json("POST", { phone, code }));
+
+export const getMe = () => asCustomer<Customer>("/api/me");
+
+export const updateProfile = (profile: CustomerProfile) =>
+  asCustomer<Customer>("/api/me", json("PATCH", profile));
+
+/* ---------- Enquiries and orders ---------- */
+
+export const createEnquiry = (input: EnquiryInput) =>
+  asCustomer<Enquiry>("/api/enquiries", json("POST", { ...input, source: "website" }));
+
+// Everything on the account: made while signed in or with the same mobile number
+export const getMyEnquiries = () => asCustomer<Enquiry[]>("/api/my/enquiries");
+
+// The number the team should call back on
+export const changeCallbackNumber = (id: string, phone: string) =>
+  asCustomer<Enquiry>(`/api/my/enquiries/${id}/phone`, json("PATCH", { phone }));
 
 /* ---------- Admin (needs the token from login) ---------- */
 
-export async function adminLogin(username: string, password: string): Promise<{ token: string }> {
-  if (USE_MOCK) {
-    await wait(500);
-    if (username === MOCK_ADMIN.username && password === MOCK_ADMIN.password) return { token: MOCK_TOKEN };
-    throw new ApiError("Incorrect username or password", 401);
-  }
-  return request("/api/admin/login", { method: "POST", body: JSON.stringify({ username, password }) });
-}
+export const adminLogin = (username: string, password: string) =>
+  request<{ token: string }>("/api/admin/login", json("POST", { username, password }));
 
-export async function getEnquiries(token: string): Promise<Enquiry[]> {
-  if (USE_MOCK) {
-    await wait(300);
-    if (token !== MOCK_TOKEN) throw new ApiError("Session expired", 401);
-    return mockDb.list();
-  }
-  return request<Enquiry[]>("/api/admin/enquiries", { token });
-}
+export const getEnquiries = (token: string) => request<Enquiry[]>("/api/admin/enquiries", { token });
 
-export async function updateEnquiryStatus(
+export const updateEnquiryStatus = (
   token: string,
   id: string,
   status: EnquiryStatus,
   reason?: string, // why it was lost, e.g. "Quote not agreed"
-): Promise<Enquiry> {
-  if (USE_MOCK) return mockDb.setStatus(id, status, reason);
-  return request<Enquiry>(`/api/admin/enquiries/${id}`, {
-    method: "PATCH",
-    token,
-    body: JSON.stringify({ status, reason }),
-  });
-}
+) => request<Enquiry>(`/api/admin/enquiries/${id}`, { ...json("PATCH", { status, reason }), token });
 
 // Turns an agreed quote into an order: final prices + delivery date. Sets the status to Converted
 // and creates the tracking number
-export async function finaliseOrder(token: string, id: string, draft: OrderDraft): Promise<Enquiry> {
-  if (USE_MOCK) {
-    await wait(400);
-    return mockDb.finalise(id, draft);
-  }
-  return request<Enquiry>(`/api/admin/enquiries/${id}/order`, {
-    method: "POST",
-    token,
-    body: JSON.stringify(draft),
-  });
-}
+export const finaliseOrder = (token: string, id: string, draft: OrderDraft) =>
+  request<Enquiry>(`/api/admin/enquiries/${id}/order`, { ...json("POST", draft), token });
 
 // Moves the order one stage (Confirmed → In production → Dispatched → Delivered, or back one),
 // or changes the date and note
-export async function updateOrder(token: string, id: string, changes: OrderChanges): Promise<Enquiry> {
-  if (USE_MOCK) {
-    await wait(300);
-    return mockDb.updateOrder(id, changes);
-  }
-  return request<Enquiry>(`/api/admin/enquiries/${id}/order`, {
-    method: "PATCH",
-    token,
-    body: JSON.stringify(changes),
-  });
-}
+export const updateOrder = (token: string, id: string, changes: OrderChanges) =>
+  request<Enquiry>(`/api/admin/enquiries/${id}/order`, { ...json("PATCH", changes), token });

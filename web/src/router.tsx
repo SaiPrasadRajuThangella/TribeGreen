@@ -1,10 +1,12 @@
 import { createBrowserRouter } from "react-router";
 
+import { RequireCustomer } from "@/components/RequireCustomer";
 import { SiteLayout } from "@/components/SiteLayout";
 import { PageLoading } from "@/components/ui";
 import Catalogue from "@/pages/Catalogue";
 import Enquiry from "@/pages/Enquiry";
 import Home from "@/pages/Home";
+import Login from "@/pages/Login";
 import NotFound from "@/pages/NotFound";
 import OrderDetail from "@/pages/OrderDetail";
 import Orders from "@/pages/Orders";
@@ -16,7 +18,6 @@ const lazyPage = (load: () => Promise<{ default: React.ComponentType }>) => asyn
   Component: (await load()).default,
 });
 
-
 export const router = createBrowserRouter([
   {
     Component: SiteLayout,
@@ -26,8 +27,15 @@ export const router = createBrowserRouter([
       { path: "product/:id", Component: Product },
       { path: "enquiry", Component: Enquiry },
       { path: "thank-you/:id", Component: ThankYou },
-      { path: "orders", Component: Orders },
-      { path: "orders/:id", Component: OrderDetail },
+      { path: "login", Component: Login },
+      // My orders belongs to an account
+      {
+        Component: RequireCustomer,
+        children: [
+          { path: "orders", Component: Orders },
+          { path: "orders/:id", Component: OrderDetail },
+        ],
+      },
       { path: "*", Component: NotFound },
     ],
   },

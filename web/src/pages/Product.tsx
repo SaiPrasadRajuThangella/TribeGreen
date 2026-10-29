@@ -15,6 +15,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
 import { CustomisationPicker } from "@/components/CustomisationPicker";
+import { LoadError } from "@/components/LoadError";
 import { ProductCard } from "@/components/ProductCard";
 import { QuantityEditor } from "@/components/QuantityEditor";
 import { Button } from "@/components/ui";
@@ -32,7 +33,7 @@ import NotFound from "./NotFound";
 
 export default function ProductPage() {
   const { id = "" } = useParams();
-  const { byId, loading } = useProducts();
+  const { byId, loading, error, retry } = useProducts();
   const product = byId.get(id);
 
   useSeo({
@@ -45,6 +46,13 @@ export default function ProductPage() {
     noindex: !product && !loading,
   });
 
+  if (error) {
+    return (
+      <div className="container-page py-10">
+        <LoadError message={error} onRetry={retry} />
+      </div>
+    );
+  }
   if (loading) return <div className="container-page h-[60vh]" />;
   if (!product) return <NotFound />;
   // Keyed so quantities reset when moving to another product

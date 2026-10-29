@@ -1,13 +1,5 @@
-import {
-  ArrowRight,
-  CalendarDays,
-  ChevronRight,
-  Clock,
-  MessageCircle,
-  PackageSearch,
-  Search,
-} from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowRight, CalendarDays, ChevronRight, Clock, MessageCircle, PackageSearch } from "lucide-react";
+import { useMemo } from "react";
 import { Link } from "react-router";
 
 import { Badge, CallbackNumber, CardShell, ItemList, Progress } from "@/components/orders";
@@ -15,15 +7,15 @@ import { Button, ButtonLink } from "@/components/ui";
 import { formatINR, getBudgetBand, OCCASION_META } from "@/data/catalog";
 import { useNow } from "@/hooks/useNow";
 import { useSeo } from "@/hooks/useSeo";
-import { useTrackedEnquiries } from "@/hooks/useTrackedEnquiries";
-import { findEnquiries } from "@/lib/api";
+import { useSignOut } from "@/hooks/useSignOut";
+import { useOrdersFeed } from "@/hooks/useOrdersFeed";
 import { REPLY_WITHIN_HOURS } from "@/lib/config";
 import { customerStatus } from "@/lib/orderStatus";
 import { daysUntil, formatDate, formatDay, formatTime, relativeDays, replyWindow } from "@/lib/time";
-import { formatPhone, isValidPhone, normalisePhone } from "@/lib/validation";
+import { formatPhone } from "@/lib/validation";
 import { whatsappUrl } from "@/lib/whatsapp";
-import { useMyEnquiries } from "@/store";
-import { type Enquiry, type EnquiryLookup, ORDER_STAGES } from "@/types";
+import { useCustomer } from "@/store";
+import { type Enquiry, ORDER_STAGES } from "@/types";
 
 const QUOTE_STEPS = ["Enquiry sent", "Quote call", "Order confirmed", "Delivered"];
 
@@ -35,7 +27,7 @@ export default function Orders() {
     noindex: true,
   });
 
-  const { enquiries, loading, error } = useTrackedEnquiries();
+  const { enquiries, loading, error } = useOrdersFeed();
   const now = useNow();
 
   const groups = useMemo(() => {
@@ -59,7 +51,7 @@ export default function Orders() {
       <div className="mb-8 max-w-2xl">
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">My orders</h1>
         <p className="mt-2 text-muted">
-          Quotes and orders sent from this browser, with delivery dates. Open any of them to see every step.
+          Every quote and order on your account, with delivery dates. Open any of them to see every step.
         </p>
       </div>
 
@@ -108,7 +100,7 @@ export default function Orders() {
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-24">
-          <TrackForm />
+          <AccountCard />
           <div className="rounded-[28px] bg-ink p-6 text-white">
             <p className="font-bold">Need to change something?</p>
             <p className="mt-1.5 text-sm text-white/65">
@@ -377,92 +369,42 @@ function EmptyState() {
   );
 }
 
-// "TG-5RT9LP", "tg 5rt9lp", "5RT9LP" → a reference; 10 digits (with or without +91) → a phone number
-function parseLookup(raw: string): EnquiryLookup | null {
-  const value = raw.trim();
-  if (!value) return null;
-  if (/[a-z]/i.test(value)) {
-    const code = value
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, "")
-      .replace(/^TG/, "");
-    return code.length >= 4 ? { id: `TG-${code}` } : null;
-  }
-  return isValidPhone(value) ? { phone: normalisePhone(value) } : null;
-}
-
-type TrackState = { kind: "idle" | "loading" | "invalid" | "missing" } | { kind: "found"; text: string };
-
-// Look up enquiries made on another device: the reference or the mobile number is enough
-function TrackForm() {
-  const addRefs = useMyEnquiries((s) => s.add);
-  const [value, setValue] = useState("");
-  const [state, setState] = useState<TrackState>({ kind: "idle" });
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const lookup = parseLookup(value);
-    if (!lookup) return setState({ kind: "invalid" });
-    setState({ kind: "loading" });
-    try {
-      const found = await findEnquiries(lookup);
-      if (!found.length) return setState({ kind: "missing" });
-      addRefs(...found.map((f) => ({ id: f.id, phone: f.phone })));
-      setValue("");
-      setState({
-        kind: "found",
-        text:
-          "id" in lookup
-            ? `Found ${lookup.id}. It's now on this page.`
-            : `Found ${found.length} ${found.length === 1 ? "order" : "orders"} for ${formatPhone(lookup.phone)}.`,
-      });
-    } catch {
-      setState({ kind: "missing" });
-    }
-  };
-
+// Who is signed in; their number is what links orders made on the app too
+function AccountCard() {
+  const user = useCustomer((s) => s.user);
+  const signOut = useSignOut();
+  if (!user) return null;
   return (
-    <form onSubmit={submit} noValidate className="rounded-[28px] bg-card p-6">
-      <p className="font-bold">Track an order</p>
-      <p className="mt-1 mb-4 text-sm text-muted">
-        Sent from another device? Enter the reference or the mobile number.
+    <div className="rounded-[28px] bg-card p-6">
+      <div className="flex items-center gap-3">
+        <span className="grid size-12 shrink-0 place-items-center rounded-full bg-ink text-sm font-bold text-lime">
+          {user.name
+            .split(/\s+/)
+            .slice(0, 2)
+            .map((w) => w[0]?.toUpperCase())
+            .join("")}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate font-bold">{user.name}</p>
+          <p className="truncate text-sm text-muted">{user.company}</p>
+        </div>
+      </div>
+      <dl className="mt-5 space-y-2 text-sm">
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted">Mobile</dt>
+          <dd className="font-medium">{formatPhone(user.phone)}</dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted">Email</dt>
+          <dd className="min-w-0 truncate font-medium">{user.email}</dd>
+        </div>
+      </dl>
+      <p className="mt-4 rounded-2xl bg-canvas px-4 py-3 text-xs leading-5 text-muted">
+        Enquiries made with this number in the Tribe Green app show up here too.
       </p>
-      <label className="block">
-        <span className="sr-only">Reference or mobile number</span>
-        <input
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            if (state.kind !== "loading") setState({ kind: "idle" });
-          }}
-          placeholder="TG-5RT9LP or 98765 43210"
-          autoCapitalize="characters"
-          className="h-12 w-full rounded-2xl border border-line bg-canvas px-4 text-[15px] transition outline-none placeholder:text-faint focus:border-ink focus:bg-card"
-        />
-      </label>
-      {state.kind === "invalid" ? (
-        <p role="alert" className="mt-3 text-sm text-danger">
-          Enter a reference like TG-5RT9LP or a 10-digit mobile number.
-        </p>
-      ) : state.kind === "missing" ? (
-        <p role="alert" className="mt-3 text-sm text-danger">
-          Nothing found. Check the reference or try the number you used.
-        </p>
-      ) : state.kind === "found" ? (
-        <p role="status" className="mt-3 text-sm font-medium text-lime-ink">
-          {state.text}
-        </p>
-      ) : null}
-      <Button
-        type="submit"
-        variant="dark"
-        size="md"
-        icon={Search}
-        loading={state.kind === "loading"}
-        className="mt-4 w-full"
-      >
-        Find my order
+      <Button variant="outline" size="md" className="mt-4 w-full" onClick={signOut}>
+        Sign out
       </Button>
-    </form>
+    </div>
   );
 }

@@ -108,8 +108,15 @@ export type Enquiry = EnquiryInput & {
   order?: Order;
 };
 
-// What the customer needs to look up their own enquiry
-export type EnquiryRef = { id: string; phone: string };
+// A signed-in customer. New accounts fill in name, company and email after the code
+export type Customer = {
+  id: string;
+  phone: string;
+  name: string;
+  company: string;
+  email: string;
+  profileComplete: boolean;
+  createdAt: string;
+};
 
-// Lookup from the Track form: a reference or a mobile number
-export type EnquiryLookup = { id: string } | { phone: string };
+export type CustomerProfile = Pick<Customer, "name" | "company" | "email">;

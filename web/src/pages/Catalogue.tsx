@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
+import { LoadError } from "@/components/LoadError";
 import { ProductCard, ProductCardSkeleton } from "@/components/ProductCard";
 import { Button, Chip } from "@/components/ui";
 import { BUDGET_BANDS, getBudgetBand, OCCASION_META } from "@/data/catalog";
@@ -19,7 +20,7 @@ const isBudget = (v: string | null): v is BudgetBandId => BUDGET_BANDS.some((b) 
 
 export default function Catalogue() {
   const [params, setParams] = useSearchParams();
-  const { products, loading } = useProducts();
+  const { products, loading, error, retry } = useProducts();
   const { inList, toggle } = useListToggle();
   const [sheetOpen, setSheetOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -227,7 +228,9 @@ export default function Catalogue() {
             </label>
           </div>
 
-          {loading ? (
+          {error ? (
+            <LoadError message={error} onRetry={retry} />
+          ) : loading ? (
             <div className="grid grid-cols-2 gap-3 sm:gap-5 xl:grid-cols-3">
               {Array.from({ length: 6 }, (_, i) => (
                 <ProductCardSkeleton key={i} />

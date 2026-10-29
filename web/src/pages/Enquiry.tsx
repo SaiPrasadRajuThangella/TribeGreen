@@ -1,4 +1,4 @@
-import { AlertCircle, Plus, Send } from "lucide-react";
+import { AlertCircle, Plus, Send, UserRound } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -11,8 +11,20 @@ import { useSeo } from "@/hooks/useSeo";
 import { createEnquiry } from "@/lib/api";
 import { REPLY_WITHIN_HOURS } from "@/lib/config";
 import { allCustomisations, estimateFor, quantityProblem, toEnquiryItem } from "@/lib/items";
-import { type EnquiryFormErrors, type EnquiryFormValues, validateEnquiry } from "@/lib/validation";
-import { type EnquiryDraft, useEnquiryDraft, useEnquiryList, useMyEnquiries } from "@/store";
+import {
+  formatPhone,
+  type EnquiryFormErrors,
+  type EnquiryFormValues,
+  validateEnquiry,
+} from "@/lib/validation";
+import {
+  type EnquiryDraft,
+  isSignedIn,
+  useCustomer,
+  useEnquiryDraft,
+  useEnquiryList,
+  useMyOrders,
+} from "@/store";
 import { OCCASIONS } from "@/types";
 
 const tomorrow = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -33,7 +45,8 @@ export default function EnquiryPage() {
   const draft = useEnquiryDraft((s) => s.draft);
   const setField = useEnquiryDraft((s) => s.setField);
   const clearDraft = useEnquiryDraft((s) => s.clear);
-  const rememberEnquiry = useMyEnquiries((s) => s.add);
+  const customer = useCustomer((s) => s.user);
+  const signedIn = useCustomer(isSignedIn);
 
   const [errors, setErrors] = useState<EnquiryFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -60,11 +73,12 @@ export default function EnquiryPage() {
   );
 
   const products = gifts.map(({ item, product }) => toEnquiryItem(product, item));
+  // Signed-in customers start from their profile; anything typed here wins
   const form: EnquiryFormValues = {
-    name: "",
-    company: "",
-    phone: "",
-    email: "",
+    name: customer?.name ?? "",
+    company: customer?.company ?? "",
+    phone: customer?.phone ?? "",
+    email: customer?.email ?? "",
     deliveryDate: "",
     message: "",
     ...draft,
@@ -97,10 +111,16 @@ export default function EnquiryPage() {
       document.getElementById(`field-${first}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+    // Enquiries belong to an account: sign in, then come back here (the form is saved)
+    if (!signedIn) {
+      navigate("/login?next=/enquiry");
+      return;
+    }
     setSubmitting(true);
     try {
       const enquiry = await createEnquiry(data);
-      rememberEnquiry({ id: enquiry.id, phone: enquiry.phone });
+      // My orders loads fresh next time it opens
+      useMyOrders.getState().reset();
       clearList();
       clearDraft();
       navigate(`/thank-you/${enquiry.id}`, { state: { enquiry } });
@@ -120,6 +140,12 @@ export default function EnquiryPage() {
         <p className="mt-2 text-muted">
           Tell us what you need. Our gifting team calls you back within {REPLY_WITHIN_HOURS} hours.
         </p>
+        {signedIn && customer ? (
+          <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-card px-3.5 py-1.5 text-sm text-muted">
+            <UserRound size={15} /> Signed in as{" "}
+            <span className="font-semibold text-ink">{customer.name}</span> · {formatPhone(customer.phone)}
+          </p>
+        ) : null}
       </div>
 
       <form
@@ -317,11 +343,19 @@ export default function EnquiryPage() {
               </p>
             ) : null}
 
-            <Button type="submit" variant="dark" icon={Send} loading={submitting} className="mt-5 w-full">
-              Send enquiry
+            <Button
+              type="submit"
+              variant="dark"
+              icon={signedIn ? Send : UserRound}
+              loading={submitting}
+              className="mt-5 w-full"
+            >
+              {signedIn ? "Send enquiry" : "Sign in to send"}
             </Button>
             <p className="mt-3 text-center text-xs text-faint">
-              No payment needed. We'll call you with a quote within {REPLY_WITHIN_HOURS} hours.
+              {signedIn
+                ? `No payment needed. We'll call you with a quote within ${REPLY_WITHIN_HOURS} hours.`
+                : "Sign in with your mobile number. Everything you've typed stays here."}
             </p>
           </div>
         </aside>

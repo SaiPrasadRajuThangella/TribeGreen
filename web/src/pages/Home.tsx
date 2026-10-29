@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { useMemo } from "react";
 import { Link } from "react-router";
 
+import { LoadError } from "@/components/LoadError";
 import { ProductCard, ProductCardSkeleton } from "@/components/ProductCard";
 import { ButtonLink, SectionHeading } from "@/components/ui";
 import { CATEGORY_META, OCCASION_META } from "@/data/catalog";
@@ -50,7 +51,7 @@ export default function Home() {
     path: "/",
   });
 
-  const { products, loading } = useProducts();
+  const { products, loading, error, retry } = useProducts();
   const { inList, toggle } = useListToggle();
   // Tagged gifts first, topped up to a full two rows of four
   const featured = useMemo(
@@ -187,13 +188,17 @@ export default function Home() {
             }
           />
         </motion.div>
-        <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
-          {loading
-            ? Array.from({ length: 4 }, (_, i) => <ProductCardSkeleton key={i} />)
-            : featured.map((p) => (
-                <ProductCard key={p.id} product={p} inList={inList.has(p.id)} onToggleList={toggle} />
-              ))}
-        </div>
+        {error ? (
+          <LoadError message={error} onRetry={retry} />
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
+            {loading
+              ? Array.from({ length: 4 }, (_, i) => <ProductCardSkeleton key={i} />)
+              : featured.map((p) => (
+                  <ProductCard key={p.id} product={p} inList={inList.has(p.id)} onToggleList={toggle} />
+                ))}
+          </div>
+        )}
       </section>
 
       {/* Occasions */}

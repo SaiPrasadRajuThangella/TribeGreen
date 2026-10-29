@@ -3,7 +3,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { type Choice, toggleIn } from "@/lib/items";
 import type { EnquiryFormValues } from "@/lib/validation";
-import type { Customisation, EnquiryRef } from "@/types";
+import type { Customer, Customisation, Enquiry } from "@/types";
 
 /* ---------- Enquiry list: products the visitor wants a quote for ---------- */
 
@@ -84,27 +84,57 @@ export const useEnquiryDraft = create<DraftState>()(
   ),
 );
 
-/* ---------- Enquiries sent from this browser, for the My orders page ---------- */
+/* ---------- Signed-in customer ---------- */
 
-type MyEnquiriesState = {
-  refs: EnquiryRef[];
-  add: (...refs: EnquiryRef[]) => void;
-  remove: (id: string) => void;
-  setPhone: (id: string, phone: string) => void;
+type CustomerState = {
+  token: string | null;
+  user: Customer | null;
+  setSession: (token: string, user: Customer) => void;
+  setUser: (user: Customer) => void;
+  signOut: () => void;
 };
 
-export const useMyEnquiries = create<MyEnquiriesState>()(
+export const useCustomer = create<CustomerState>()(
   persist(
     (set) => ({
-      refs: [],
-      add: (...refs) =>
-        set((s) => ({ refs: [...refs, ...s.refs.filter((r) => !refs.some((n) => n.id === r.id))] })),
-      remove: (id) => set((s) => ({ refs: s.refs.filter((r) => r.id !== id) })),
-      setPhone: (id, phone) => set((s) => ({ refs: s.refs.map((r) => (r.id === id ? { ...r, phone } : r)) })),
+      token: null,
+      user: null,
+      setSession: (token, user) => set({ token, user }),
+      setUser: (user) => set({ user }),
+      signOut: () => {
+        set({ token: null, user: null });
+        // Their details and orders shouldn't stay on a shared computer
+        useEnquiryDraft.getState().clear();
+        useMyOrders.getState().reset();
+      },
     }),
-    { name: "tg-my-enquiries", storage: createJSONStorage(() => localStorage) },
+    { name: "tg-customer", storage: createJSONStorage(() => localStorage) },
   ),
 );
+
+export const isSignedIn = (s: Pick<CustomerState, "token" | "user">) =>
+  !!s.token && !!s.user?.profileComplete;
+
+/* ---------- The customer's enquiries and orders, shared by My orders and the details page ---------- */
+
+type MyOrdersState = {
+  enquiries: Enquiry[] | null; // null until the first load
+  error: string | null;
+  setAll: (enquiries: Enquiry[]) => void;
+  replace: (enquiry: Enquiry) => void;
+  setError: (error: string | null) => void;
+  reset: () => void;
+};
+
+export const useMyOrders = create<MyOrdersState>()((set) => ({
+  enquiries: null,
+  error: null,
+  setAll: (enquiries) => set({ enquiries, error: null }),
+  replace: (enquiry) =>
+    set((s) => ({ enquiries: s.enquiries?.map((e) => (e.id === enquiry.id ? enquiry : e)) ?? [enquiry] })),
+  setError: (error) => set({ error }),
+  reset: () => set({ enquiries: null, error: null }),
+}));
 
 /* ---------- Admin session ---------- */
 

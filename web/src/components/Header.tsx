@@ -1,9 +1,11 @@
-import { Gift, Menu, Package, Search, ShoppingBag, X } from "lucide-react";
+import { Gift, LogOut, Menu, Package, Search, ShoppingBag, UserRound, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router";
 
-import { useEnquiryList } from "@/store";
+import { useSignOut } from "@/hooks/useSignOut";
+import { formatPhone } from "@/lib/validation";
+import { isSignedIn, useCustomer, useEnquiryList } from "@/store";
 
 import { ButtonLink } from "./ui";
 
@@ -34,6 +36,8 @@ export function Header() {
   const setOpen = useEnquiryList((s) => s.setOpen);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
+  const signedIn = useCustomer(isSignedIn);
+  const signOut = useSignOut();
   // The menu belongs to the page it was opened on, so navigating closes it
   const [menuKey, setMenuKey] = useState<string | null>(null);
   const menuOpen = menuKey === location.key;
@@ -80,15 +84,8 @@ export function Header() {
           >
             <Search size={19} />
           </Link>
-          {/* Phones reach My orders from the menu, to keep the header from overflowing */}
-          <Link
-            to="/orders"
-            aria-label="My orders"
-            title="My orders"
-            className="grid size-11 place-items-center rounded-full bg-card transition hover:bg-soft max-sm:hidden"
-          >
-            <Package size={19} />
-          </Link>
+          {/* On phones the account lives in the menu, to keep the header from overflowing */}
+          <AccountButton />
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -151,6 +148,22 @@ export function Header() {
               >
                 <Package size={17} /> My orders
               </Link>
+              {signedIn ? (
+                <button
+                  type="button"
+                  onClick={signOut}
+                  className="flex items-center gap-2 rounded-2xl px-4 py-3 text-left font-medium hover:bg-card"
+                >
+                  <LogOut size={17} /> Sign out
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  className="flex items-center gap-2 rounded-2xl px-4 py-3 font-medium hover:bg-card"
+                >
+                  <UserRound size={17} /> Sign in
+                </Link>
+              )}
               <ButtonLink to="/enquiry" variant="dark" className="mt-2 sm:hidden">
                 Get a quote
               </ButtonLink>
@@ -159,5 +172,101 @@ export function Header() {
         ) : null}
       </AnimatePresence>
     </header>
+  );
+}
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("") || "?";
+
+// Sign in, or the signed-in customer's initials with a small menu
+function AccountButton() {
+  const user = useCustomer((s) => s.user);
+  const signedIn = useCustomer(isSignedIn);
+  const signOut = useSignOut();
+  const location = useLocation();
+  const box = useRef<HTMLDivElement>(null);
+  // Tied to the page it was opened on, so navigating closes it
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const open = openKey === location.key;
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !box.current?.contains(e.target as Node)) {
+        setOpenKey(null);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  if (!signedIn || !user) {
+    const next =
+      location.pathname === "/login"
+        ? ""
+        : `?next=${encodeURIComponent(location.pathname + location.search)}`;
+    return (
+      <Link
+        to={`/login${next}`}
+        className="flex h-11 items-center gap-2 rounded-full bg-card px-3.5 text-sm font-semibold transition hover:bg-soft max-sm:hidden"
+      >
+        <UserRound size={18} />
+        <span className="max-xl:hidden">Sign in</span>
+      </Link>
+    );
+  }
+
+  return (
+    <div ref={box} className="relative max-sm:hidden">
+      <button
+        type="button"
+        onClick={() => setOpenKey(open ? null : location.key)}
+        aria-label={`Account: ${user.name}`}
+        aria-expanded={open}
+        className="grid size-11 place-items-center rounded-full bg-ink text-sm font-bold text-lime transition hover:bg-ink-soft"
+      >
+        {initials(user.name)}
+      </button>
+      <AnimatePresence>
+        {open ? (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+            transition={{ duration: 0.18 }}
+            className="absolute top-14 right-0 w-64 origin-top-right rounded-3xl bg-card p-2 shadow-[0_20px_50px_-20px_rgba(18,18,18,0.35)] ring-1 ring-line"
+          >
+            <div className="px-3 pt-2 pb-3">
+              <p className="truncate font-semibold">{user.name}</p>
+              <p className="truncate text-xs text-muted">
+                {user.company} · {formatPhone(user.phone)}
+              </p>
+            </div>
+            <Link
+              to="/orders"
+              className="flex items-center gap-2.5 rounded-2xl px-3 py-2.5 text-sm font-medium hover:bg-canvas"
+            >
+              <Package size={17} /> My orders
+            </Link>
+            <button
+              type="button"
+              onClick={signOut}
+              className="flex w-full items-center gap-2.5 rounded-2xl px-3 py-2.5 text-left text-sm font-medium hover:bg-canvas"
+            >
+              <LogOut size={17} /> Sign out
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
   );
 }

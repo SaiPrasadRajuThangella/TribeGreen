@@ -8,7 +8,7 @@ import { changeCallbackNumber } from "@/lib/api";
 import { describeVariants } from "@/lib/items";
 import type { BadgeTone } from "@/lib/orderStatus";
 import { formatPhone, isValidPhone, normalisePhone } from "@/lib/validation";
-import { useMyEnquiries } from "@/store";
+import { useMyOrders } from "@/store";
 import type { Enquiry, EnquiryItem } from "@/types";
 
 import { Button } from "./ui";
@@ -135,8 +135,7 @@ export function ItemList({ items }: { items: (EnquiryItem & { unitPrice?: number
 
 // "We'll call +91 98765 43210 · Change number", with an inline editor
 export function CallbackNumber({ enquiry, lead = "We'll call" }: { enquiry: Enquiry; lead?: string }) {
-  const ref = useMyEnquiries((s) => s.refs.find((r) => r.id === enquiry.id));
-  const setPhone = useMyEnquiries((s) => s.setPhone);
+  const replace = useMyOrders((s) => s.replace);
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
@@ -148,8 +147,7 @@ export function CallbackNumber({ enquiry, lead = "We'll call" }: { enquiry: Enqu
     setSaving(true);
     setError(null);
     try {
-      await changeCallbackNumber({ id: enquiry.id, phone: ref?.phone ?? enquiry.phone }, value);
-      setPhone(enquiry.id, normalisePhone(value));
+      replace(await changeCallbackNumber(enquiry.id, normalisePhone(value)));
       setEditing(false);
     } catch (err) {
       setError((err as Error).message);
