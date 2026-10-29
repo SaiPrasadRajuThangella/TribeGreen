@@ -6,18 +6,99 @@ A small catalogue and enquiry system for Tribe Green (corporate gifting), built 
 
 ```
 tribe-green/
-├── backend/   Node.js + Express + MongoDB API (in progress)
+├── backend/   Node.js + Express + MongoDB API
 ├── web/       React + Vite website and admin page
 └── mobile/    React Native (Expo) Android app
 ```
 
 Each folder is its own project with its own `package.json`. Run each one from inside its folder.
 
-**Requires Node.js 22.13 or newer** (Expo SDK 58 and Vite 8 need it).
+**Requires Node.js 22.13 or newer** for the mobile app (Expo SDK 58). The backend and website run on Node 20.19 or newer.
+
+## Quick start
+
+Two terminals:
+
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Open http://localhost:5173. The website forwards `/api` to the backend on port 4000.
+
+### Demo logins
+
+| Who | Where | Login |
+|---|---|---|
+| Customer | http://localhost:5173/login | Mobile `9999999999`, code `123456` |
+| Admin | http://localhost:5173/admin | The `ADMIN_USERNAME` / `ADMIN_PASSWORD` in `backend/.env.example` |
+
+No SMS provider is connected yet, so every number's sign-in code is `123456` (`OTP_MODE=fixed`). Any other number signs up a new customer, who then adds a name, company and email.
+
+## Backend (`backend/`)
+
+**Stack:** Node.js · Express 5 · MongoDB with Mongoose · Zod validation · JWT sign-in · bcrypt · Helmet · rate limiting · TypeScript
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Starts the API on http://localhost:4000 with auto-reload. Without `MONGODB_URI` it also starts a local MongoDB, kept in `backend/.data` |
+| `npm test` | API tests against a throwaway database (sign-in, enquiry rules, ownership, admin access, order stages) |
+| `npm run seed` | Syncs the catalogue, admin and demo customer; `npm run seed -- --reset` also restarts the enquiries from the samples |
+| `npm run build` / `npm start` | Compile to `dist/` and run it (production) |
+
+Settings live in `backend/.env` (copy `backend/.env.example`). On every start the API:
+
+- syncs the 12 products from `backend/src/data/products.ts` into MongoDB,
+- creates or updates the one admin from `ADMIN_USERNAME` / `ADMIN_PASSWORD` (the password is stored hashed),
+- creates the demo customer (9999999999),
+- fills an empty database with sample enquiries from the website and the app (`SEED_SAMPLES=true`), two of them on the demo customer's account.
+
+### What the API checks
+
+- **Phone, email, quantity and dates** with the same rules and messages as the website form.
+- **Every gift against the catalogue:** it exists, has at least 10 units, its sizes / colours are real and add up to the units, and its customisation is one the gift offers. Names, total units and the enquiry-wide customisation list are worked out on the server, not trusted from the client.
+- **Ownership:** a customer sees only enquiries made while signed in or with their verified mobile number.
+- **Admin only:** every `/api/admin` route needs the admin token; a customer token gets 403.
+- **Orders** move one stage at a time and finalising creates a unique tracking number. Sign-in codes are stored hashed, expire after 5 minutes and lock after 5 wrong tries.
+
+### API
+
+Errors come back as `{ message, errors? }`, where `errors` maps a field to its message.
+
+| Method | Path | Who | Used for |
+|---|---|---|---|
+| GET | `/api/products`, `/api/products/:id` | Anyone | Catalogue |
+| POST | `/api/auth/otp` | Anyone | `{ phone }`: send a sign-in code |
+| POST | `/api/auth/verify` | Anyone | `{ phone, code }` → `{ token, user }`. Creates the account for a new number |
+| GET, PATCH | `/api/me` | Customer | The profile; PATCH `{ name, company, email }` completes it |
+| POST | `/api/enquiries` | Anyone | Send an enquiry. Signed in, it's linked to the account (the website always signs in; the app has no accounts yet). Returns it with `id` and `respondBy` (2 hours later) |
+| GET | `/api/my/enquiries`, `/api/my/enquiries/:id` | Customer | Their enquiries and orders |
+| PATCH | `/api/my/enquiries/:id/phone` | Customer | `{ phone }`: change the call-back number |
+| POST | `/api/admin/login` | Anyone | `{ username, password }` → `{ token }` |
+| GET | `/api/admin/enquiries` | Admin | All enquiries from the website and the app |
+| PATCH | `/api/admin/enquiries/:id` | Admin | `{ status, reason? }`. Lost records `closedAt` and the reason, e.g. "Quote not agreed" |
+| POST | `/api/admin/enquiries/:id/order` | Admin | Finalise: `{ items: [{ id, unitPrice }], expectedDelivery, note }`. Sets the status to Converted and creates `trackingNumber` |
+| PATCH | `/api/admin/enquiries/:id/order` | Admin | `{ stage?, expectedDelivery?, note? }`. One stage forwards or back; each stage's time is kept in `stageTimes` |
+
+### Deploying to Render with MongoDB Atlas
+
+1. Create a free cluster on [MongoDB Atlas](https://www.mongodb.com/atlas) and copy its connection string.
+2. On [Render](https://render.com), create a **Web Service** from the GitHub repo with **Root Directory** `backend`, build command `npm install && npm run build`, start command `npm start`.
+3. Add the environment variables from `backend/.env.example`: `NODE_ENV=production`, `MONGODB_URI`, a long random `JWT_SECRET`, your own `ADMIN_PASSWORD`, and `CORS_ORIGIN` set to the website's address.
+4. Set the website's `VITE_API_URL` to the Render address.
 
 ## Website (`web/`)
 
 **Stack:** React 19 · Vite 8 · TypeScript · Tailwind CSS 4 · React Router 7 · Motion · Zustand · Zod · Plus Jakarta Sans
+
+Start the backend first (see Quick start), then:
 
 ```bash
 cd web
@@ -35,9 +116,10 @@ Open http://localhost:5173.
 | Catalogue | `/catalogue` | Search, sort, and filters by occasion, budget and category (one, several or all, e.g. `?category=Drinkware&category=Apparel`). Filters live in the URL, so a filtered view can be shared |
 | Product | `/product/:id` | Photo, price range, quantity with a live estimate, occasions, WhatsApp button with a pre-filled message about the product. Clothes take units per size and some gifts per colour (10 M + 10 L). Logo printing, laser engraving and name personalisation are picked here for this gift, from what it offers |
 | Enquiry list | drawer | Products picked for one quote, with units or the size / colour split, each gift's customisation, and an estimated budget. Removing a gift asks first |
-| Enquiry form | `/enquiry` | All brief fields, validated (phone, email, quantity, date). Customisation is chosen per gift in the list beside the form. The form is saved as you type, so a trip to the catalogue to add more gifts keeps it |
+| Sign in | `/login` | Mobile number, then the 6-digit code; a new number adds name, company and email once. Sending an enquiry and My orders need it; browsing doesn't |
+| Enquiry form | `/enquiry` | All brief fields, validated (phone, email, quantity, date), filled in from the account. Customisation is chosen per gift in the list beside the form. The form is saved as you type, so a trip to the catalogue (or to sign in) keeps it |
 | Thank you | `/thank-you/:id` | Confirmation with the enquiry reference and the call-back time (within 2 hours) |
-| My orders | `/orders` | Enquiries sent from this browser: a countdown to the 2-hour call back (with an option to change the number to call), then, once the admin confirms the order, the items, prices, tracking number, progress and delivery date. Orders from another device can be added with the reference or the mobile number |
+| My orders | `/orders` | Every enquiry on the account, including ones sent from the app with the same number: a countdown to the 2-hour call back (with an option to change the number to call), then, once the admin confirms the order, the items, prices, tracking number, progress and delivery date. Refreshes on its own |
 | Order details | `/orders/:id` | Every step with its date and time: enquiry sent, quote call, confirmed, in production, dispatched, delivered (or cancelled, with the reason) |
 | Admin login | `/admin/login` | Sign in to the admin page |
 | Admin | `/admin` | All enquiries from the website and the app, with source, status (New, Contacted, Converted, Lost), a 2-hour call-back timer, search, filters, a details panel and CSV download. The details panel shows each gift's sizes / colours and customisation. If the quote is agreed, the admin finalises the order (price per unit, delivery date, note) and a tracking number is created; if not, it moves to Lost with the reason. Orders then move one stage at a time, forwards or back: Confirmed, In production, Dispatched, Delivered |
@@ -47,42 +129,22 @@ Open http://localhost:5173.
 - Every gift starts at **10 units**.
 - Gifts with sizes (hoodie, polo) or colours (bottle, cap, yoga kit) are ordered per variant, and the variants add up to the total. Adding one from the catalogue opens a picker.
 - Each gift has its own customisation, limited to what that product offers (a hoodie can't be laser engraved).
-- The enquiry stores each gift as `{ id, name, units, variants?: [{ label, units }], customisations? }`. The enquiry-level `customisations` list (from the brief) is everything picked across the gifts. The Android app still sends only that enquiry-level list.
+- The enquiry stores each gift as `{ id, name, units, variants?: [{ label, units }], customisations? }`. The enquiry-level `customisations` list (from the brief) is everything picked across the gifts.
 
 ### Page title, description and share image
 
 - While someone browses, `useSeo()` (`web/src/hooks/useSeo.ts`) keeps `<title>`, the description and the Open Graph / Twitter tags in sync on every page.
 - WhatsApp, LinkedIn and Google don't run JavaScript. So at build time `web/build/seoPages.ts` writes a static HTML file for each page (catalogue, enquiry and every product), each with its own title, description and share image.
 
-### Demo mode
+### Where the data comes from
 
-Until the backend is connected, the site runs on mock data:
-
-- Products come from `web/src/data/products.ts`.
-- Enquiries and orders are saved in the browser's localStorage, which is seeded with sample enquiries from both the app and the website. The admin page and My orders read the same storage, so an order confirmed in the admin tab shows up on My orders straight away.
-- To try the order lookup, use the sample order `TG-5RT9LP` with its phone number from `web/src/lib/mockDb.ts`.
-- **Admin demo login:** username `admin`, password `tribegreen`. This works only in demo mode; the backend will check its own credentials.
-
-To use the real API, copy `web/.env.example` to `web/.env` and set `VITE_API_URL`. The site then calls:
-
-| Method | Path | Used for |
-|---|---|---|
-| GET | `/api/products`, `/api/products/:id` | Catalogue |
-| POST | `/api/enquiries` | Send an enquiry (`source: "website"`). Returns it with `id` and `respondBy` (2 hours later) |
-| POST | `/api/enquiries/track` | `{ refs: [{ id, phone }] }` → the matching enquiries with their orders, for My orders |
-| POST | `/api/enquiries/lookup` | `{ id }` or `{ phone }` → enquiries for the Track form |
-| PATCH | `/api/enquiries/:id/phone` | `{ phone, newPhone }`: change the call-back number (the current number proves ownership) |
-| POST | `/api/admin/login` | `{ username, password }` → `{ token }` |
-| GET | `/api/admin/enquiries` | All enquiries (Bearer token) |
-| PATCH | `/api/admin/enquiries/:id` | `{ status, reason? }`. Lost records `closedAt` and the reason, e.g. "Quote not agreed" |
-| POST | `/api/admin/enquiries/:id/order` | Finalise: `{ items (with unitPrice), expectedDelivery, note }`. Sets the status to Converted and creates `trackingNumber` |
-| PATCH | `/api/admin/enquiries/:id/order` | `{ stage?, expectedDelivery?, note? }`. The stage may only move one step forwards or back; each stage's time is kept in `stageTimes` |
+Everything comes from the backend: products, sign-in, enquiries, orders and the admin page. `web/src/data/products.ts` is a copy of the catalogue used only at build time, to write each product page's share tags.
 
 ### Deploying to Vercel
 
 1. Import the GitHub repo in Vercel and set **Root Directory** to `web`.
 2. Framework preset: Vite. Build command: `npm run build`. Output directory: `dist`.
-3. Add the environment variables from `web/.env.example`. Set `VITE_SITE_URL` to the live URL.
+3. Add the environment variables from `web/.env.example`. Set `VITE_API_URL` to the deployed backend and `VITE_SITE_URL` to the live site.
 
 `web/vercel.json` serves the pre-rendered pages and sends every other path to the app.
 
@@ -113,6 +175,12 @@ Then press `a` for an Android emulator, or scan the QR code with **Expo Go** on 
 
 ### Data
 
-The app currently runs on mock data (`mobile/src/data/products.ts`), and submitted enquiries are saved on the phone. Once the backend is ready, copy `mobile/.env.example` to `mobile/.env` and set `EXPO_PUBLIC_API_URL`. The app then switches to the real API (`mobile/src/lib/api.ts`) with no other changes.
+The app still runs on mock data (`mobile/src/data/products.ts`), and submitted enquiries are saved on the phone. It isn't connected to the backend yet: it first needs the website's per-gift units, sizes and customisation, because the API checks them. After that, set `EXPO_PUBLIC_API_URL` in `mobile/.env`.
 
 Product photos are free images from [Unsplash](https://unsplash.com).
+
+## Not done yet
+
+- **Real SMS codes.** Sign-in codes are fixed to `123456`; `OTP_MODE=console` prints random ones in the server log instead. Sending them needs an SMS provider (e.g. MSG91 or Twilio) in `backend/src/lib/otp.ts`.
+- **The Android app** isn't connected to the backend and has no sizes, per-gift customisation, accounts or order tracking yet.
+- **Not deployed.** The steps above need your own GitHub, Render, Atlas and Vercel accounts.
