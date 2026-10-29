@@ -142,3 +142,8 @@ export function SectionHeading({
     </div>
   );
 }
+
+// Blank page in the site colour, shown for a moment while a page's code downloads
+export function PageLoading() {
+  return <div className="min-h-dvh bg-canvas" />;
+}
