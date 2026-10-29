@@ -33,19 +33,21 @@ Open http://localhost:5173.
 |---|---|---|
 | Home | `/` | Hero, categories, bestsellers, gift by occasion, how it works |
 | Catalogue | `/catalogue` | Search, sort, and filters by occasion, budget and category (one, several or all, e.g. `?category=Drinkware&category=Apparel`). Filters live in the URL, so a filtered view can be shared |
-| Product | `/product/:id` | Photo, price range, quantity with a live estimate, occasions, customisation, WhatsApp button with a pre-filled message about the product. Clothes take units per size and some gifts per colour (10 M + 10 L) |
-| Enquiry list | drawer | Products picked for one quote, with units or the size / colour split, and an estimated budget |
-| Enquiry form | `/enquiry` | All brief fields, validated (phone, email, quantity, date). The form is saved as you type, so a trip to the catalogue to add more gifts keeps it |
+| Product | `/product/:id` | Photo, price range, quantity with a live estimate, occasions, WhatsApp button with a pre-filled message about the product. Clothes take units per size and some gifts per colour (10 M + 10 L). Logo printing, laser engraving and name personalisation are picked here for this gift, from what it offers |
+| Enquiry list | drawer | Products picked for one quote, with units or the size / colour split, each gift's customisation, and an estimated budget. Removing a gift asks first |
+| Enquiry form | `/enquiry` | All brief fields, validated (phone, email, quantity, date). Customisation is chosen per gift in the list beside the form. The form is saved as you type, so a trip to the catalogue to add more gifts keeps it |
 | Thank you | `/thank-you/:id` | Confirmation with the enquiry reference and the call-back time (within 2 hours) |
-| My orders | `/orders` | Enquiries sent from this browser: a countdown to the 2-hour call back, then, once the admin confirms the order, the items, prices, progress and delivery date. Another device's order can be added with its reference and phone number |
+| My orders | `/orders` | Enquiries sent from this browser: a countdown to the 2-hour call back (with an option to change the number to call), then, once the admin confirms the order, the items, prices, tracking number, progress and delivery date. Orders from another device can be added with the reference or the mobile number |
+| Order details | `/orders/:id` | Every step with its date and time: enquiry sent, quote call, confirmed, in production, dispatched, delivered (or cancelled, with the reason) |
 | Admin login | `/admin/login` | Sign in to the admin page |
-| Admin | `/admin` | All enquiries from the website and the app, with source, status (New, Contacted, Converted, Lost), a 2-hour call-back timer, search, filters, a details panel and CSV download. From the details panel the admin finalises an order (price per unit, delivery date, note) and moves it through Confirmed, In production, Dispatched and Delivered |
+| Admin | `/admin` | All enquiries from the website and the app, with source, status (New, Contacted, Converted, Lost), a 2-hour call-back timer, search, filters, a details panel and CSV download. The details panel shows each gift's sizes / colours and customisation. If the quote is agreed, the admin finalises the order (price per unit, delivery date, note) and a tracking number is created; if not, it moves to Lost with the reason. Orders then move one stage at a time, forwards or back: Confirmed, In production, Dispatched, Delivered |
 
 ### Quantities
 
 - Every gift starts at **10 units**.
 - Gifts with sizes (hoodie, polo) or colours (bottle, cap, yoga kit) are ordered per variant, and the variants add up to the total. Adding one from the catalogue opens a picker.
-- The enquiry stores each gift as `{ id, name, units, variants?: [{ label, units }] }`.
+- Each gift has its own customisation, limited to what that product offers (a hoodie can't be laser engraved).
+- The enquiry stores each gift as `{ id, name, units, variants?: [{ label, units }], customisations? }`. The enquiry-level `customisations` list (from the brief) is everything picked across the gifts. The Android app still sends only that enquiry-level list.
 
 ### Page title, description and share image
 
@@ -68,11 +70,13 @@ To use the real API, copy `web/.env.example` to `web/.env` and set `VITE_API_URL
 | GET | `/api/products`, `/api/products/:id` | Catalogue |
 | POST | `/api/enquiries` | Send an enquiry (`source: "website"`). Returns it with `id` and `respondBy` (2 hours later) |
 | POST | `/api/enquiries/track` | `{ refs: [{ id, phone }] }` → the matching enquiries with their orders, for My orders |
+| POST | `/api/enquiries/lookup` | `{ id }` or `{ phone }` → enquiries for the Track form |
+| PATCH | `/api/enquiries/:id/phone` | `{ phone, newPhone }`: change the call-back number (the current number proves ownership) |
 | POST | `/api/admin/login` | `{ username, password }` → `{ token }` |
 | GET | `/api/admin/enquiries` | All enquiries (Bearer token) |
-| PATCH | `/api/admin/enquiries/:id` | `{ status }` |
-| POST | `/api/admin/enquiries/:id/order` | Finalise: `{ items (with unitPrice), expectedDelivery, note }`, sets the status to Converted |
-| PATCH | `/api/admin/enquiries/:id/order` | `{ stage?, expectedDelivery?, note? }` |
+| PATCH | `/api/admin/enquiries/:id` | `{ status, reason? }`. Lost records `closedAt` and the reason, e.g. "Quote not agreed" |
+| POST | `/api/admin/enquiries/:id/order` | Finalise: `{ items (with unitPrice), expectedDelivery, note }`. Sets the status to Converted and creates `trackingNumber` |
+| PATCH | `/api/admin/enquiries/:id/order` | `{ stage?, expectedDelivery?, note? }`. The stage may only move one step forwards or back; each stage's time is kept in `stageTimes` |
 
 ### Deploying to Vercel
 
