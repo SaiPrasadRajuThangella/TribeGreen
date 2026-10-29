@@ -1,0 +1,5 @@
+node_modules
+dist
+# Local development database (npm run dev)
+.data
+.env
