@@ -45,9 +45,11 @@ export function ListDrawer() {
   useScrollLock(open);
   useEffect(() => {
     if (!open) return;
-    // Escape closes the size picker first when it is open on top
-    const onKey = (e: KeyboardEvent) =>
-      e.key === "Escape" && !useEnquiryList.getState().editing && setOpen(false);
+    // Escape closes the size picker or the remove prompt first when one is open on top
+    const onKey = (e: KeyboardEvent) => {
+      const { editing, removing } = useEnquiryList.getState();
+      if (e.key === "Escape" && !editing && !removing) setOpen(false);
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, setOpen]);

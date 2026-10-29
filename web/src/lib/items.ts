@@ -1,8 +1,18 @@
 import { MIN_ORDER } from "@/data/products";
-import type { EnquiryItem, Product, VariantQty } from "@/types";
+import type { Customisation, EnquiryItem, Product, VariantQty } from "@/types";
 
 // Quantity of one gift: a plain number, or units per size / colour
 export type Quantity = { units: number; variants?: VariantQty[] };
+
+// Everything chosen for one gift: quantity plus its customisation
+export type Choice = Quantity & { customisations?: Customisation[] };
+
+// Only what this product offers, in the standard order
+export const cleanCustomisations = (product: Product, picked: Customisation[] = []) =>
+  product.customisations.filter((c) => picked.includes(c));
+
+export const toggleIn = <T>(list: T[] = [], value: T) =>
+  list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
 
 export const UNIT_STEP = 5;
 
@@ -41,9 +51,15 @@ export const estimateFor = (product: Product, units: number) => ({
   max: units * product.priceMax,
 });
 
-export const toEnquiryItem = (product: Product, qty: Quantity): EnquiryItem => ({
+export const toEnquiryItem = (product: Product, choice: Choice): EnquiryItem => ({
   id: product.id,
   name: product.name,
-  units: qty.units,
-  ...(product.option ? { variants: qty.variants ?? [] } : {}),
+  units: choice.units,
+  ...(product.option ? { variants: choice.variants ?? [] } : {}),
+  customisations: cleanCustomisations(product, choice.customisations),
 });
+
+// The enquiry-level list the brief asks for: every customisation across the gifts
+export const allCustomisations = (items: EnquiryItem[]) => [
+  ...new Set(items.flatMap((i) => i.customisations ?? [])),
+];

@@ -1,6 +1,9 @@
 import {
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Clock,
+  Copy,
   Download,
   ExternalLink,
   Gift,
@@ -10,6 +13,8 @@ import {
   MessageCircle,
   PackageCheck,
   Phone,
+  RotateCcw,
+  ThumbsDown,
   RefreshCw,
   Search,
   Smartphone,
@@ -19,8 +24,9 @@ import { AnimatePresence, motion } from "motion/react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui";
-import { formatINR, getBudgetBand, OCCASION_META } from "@/data/catalog";
+import { COLOUR_SWATCH, CUSTOMISATION_META, formatINR, getBudgetBand, OCCASION_META } from "@/data/catalog";
 import { useNow } from "@/hooks/useNow";
 import { useProducts } from "@/hooks/useProducts";
 import { useSeo } from "@/hooks/useSeo";
@@ -30,7 +36,15 @@ import { downloadCsv } from "@/lib/csv";
 import { describeVariants } from "@/lib/items";
 import { formatDay, formatTime, replyWindow } from "@/lib/time";
 import { useAuth } from "@/store";
-import { type Enquiry, type EnquiryStatus, ORDER_STAGES, type OrderItem, type OrderStage } from "@/types";
+import {
+  type Enquiry,
+  type EnquiryItem,
+  type EnquiryStatus,
+  nextStage,
+  ORDER_STAGES,
+  type OrderItem,
+  type OrderStage,
+} from "@/types";
 
 const STATUSES: EnquiryStatus[] = ["New", "Contacted", "Converted", "Lost"];
 
@@ -108,7 +122,8 @@ export default function AdminDashboard() {
       const before = enquiries;
       setEnquiries((list) => list.map((e) => (e.id === id ? { ...e, status: next } : e)));
       try {
-        await updateEnquiryStatus(token, id, next);
+        const updated = await updateEnquiryStatus(token, id, next);
+        setEnquiries((list) => list.map((e) => (e.id === id ? updated : e)));
         setToast(`${id} marked as ${next}`);
       } catch (err) {
         setEnquiries(before);
@@ -644,33 +659,23 @@ function DetailDrawer({
               </dl>
 
               <div className="rounded-[24px] bg-card p-5">
-                <p className="mb-3 text-sm font-semibold">Gifts</p>
-                <ul className="divide-y divide-line text-sm">
+                <div className="mb-3 flex items-baseline justify-between">
+                  <p className="text-sm font-semibold">Gifts and specification</p>
+                  <p className="text-xs text-muted">{enquiry.units.toLocaleString("en-IN")} units</p>
+                </div>
+                <ul className="space-y-2.5">
                   {enquiry.products.map((p) => (
-                    <li key={p.id} className="flex justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
-                      <span className="min-w-0">
-                        <Link
-                          to={`/product/${p.id}`}
-                          target="_blank"
-                          className="font-medium underline-offset-4 hover:underline"
-                        >
-                          {p.name}
-                        </Link>
-                        {p.variants?.length ? (
-                          <span className="block text-xs text-muted">{describeVariants(p.variants)}</span>
-                        ) : null}
-                      </span>
-                      <span className="shrink-0 font-semibold tabular-nums">{p.units} units</span>
-                    </li>
+                    <GiftSpec key={p.id} item={p} />
                   ))}
                 </ul>
+                {/* The app still picks customisation for the whole enquiry */}
+                {enquiry.customisations.length && !enquiry.products.some((p) => p.customisations?.length) ? (
+                  <p className="mt-3 rounded-xl bg-canvas px-3 py-2 text-xs text-muted">
+                    For all gifts:{" "}
+                    <span className="font-semibold text-ink">{enquiry.customisations.join(", ")}</span>
+                  </p>
+                ) : null}
               </div>
-
-              {enquiry.order ? (
-                <ManageOrder key={enquiry.id} enquiry={enquiry} {...handlers} />
-              ) : (
-                <FinaliseOrder key={enquiry.id} enquiry={enquiry} {...handlers} />
-              )}
 
               {enquiry.message ? (
                 <div className="rounded-[24px] bg-card p-5">
@@ -678,6 +683,14 @@ function DetailDrawer({
                   <p className="text-sm leading-6 whitespace-pre-line text-ink-soft">{enquiry.message}</p>
                 </div>
               ) : null}
+
+              {enquiry.status === "Lost" ? (
+                <ClosedCard enquiry={enquiry} {...handlers} />
+              ) : enquiry.order ? (
+                <ManageOrder key={enquiry.id} enquiry={enquiry} {...handlers} />
+              ) : (
+                <FinaliseOrder key={enquiry.id} enquiry={enquiry} {...handlers} />
+              )}
             </div>
           </motion.aside>
         </div>
@@ -708,6 +721,64 @@ function Detail({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+// One gift with everything the team needs to make it: units, size / colour split, customisation
+function GiftSpec({ item }: { item: EnquiryItem & { unitPrice?: number } }) {
+  return (
+    <li className="rounded-2xl bg-canvas p-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <Link
+          to={`/product/${item.id}`}
+          target="_blank"
+          className="min-w-0 truncate text-sm font-semibold underline-offset-4 hover:underline"
+        >
+          {item.name}
+        </Link>
+        <span className="shrink-0 text-sm font-semibold tabular-nums">
+          {item.units} units
+          {item.unitPrice ? (
+            <span className="font-normal text-muted"> × {formatINR(item.unitPrice)}</span>
+          ) : null}
+        </span>
+      </div>
+      {item.variants?.length ? (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {item.variants.map((v) => (
+            <span
+              key={v.label}
+              className="inline-flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[11px] font-semibold tabular-nums"
+            >
+              {COLOUR_SWATCH[v.label] ? (
+                <span
+                  className="size-2.5 rounded-full ring-1 ring-ink/15"
+                  style={{ background: COLOUR_SWATCH[v.label] }}
+                />
+              ) : null}
+              {v.label} · {v.units}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <div className="mt-2 flex flex-wrap gap-1">
+        {item.customisations?.length ? (
+          item.customisations.map((c) => {
+            const { icon: Icon } = CUSTOMISATION_META[c];
+            return (
+              <span
+                key={c}
+                className="inline-flex items-center gap-1 rounded-full bg-lime-soft px-2 py-0.5 text-[11px] font-semibold text-lime-ink"
+              >
+                <Icon size={11} /> {c}
+              </span>
+            );
+          })
+        ) : (
+          <span className="text-[11px] text-faint">No customisation</span>
+        )}
+      </div>
+    </li>
+  );
+}
+
 const today = () => new Date().toISOString().slice(0, 10);
 
 const fieldCls =
@@ -715,13 +786,15 @@ const fieldCls =
 
 const orderTotal = (items: OrderItem[]) => items.reduce((sum, i) => sum + i.units * i.unitPrice, 0);
 
-// Quote agreed: set the price per unit and the delivery date, and it becomes the customer's order
+// Quote agreed: set the price per unit and the delivery date, and it becomes the customer's order.
+// Not agreed: the enquiry moves to Lost.
 function FinaliseOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { enquiry: Enquiry }) {
   const { byId } = useProducts();
   const [prices, setPrices] = useState<Record<string, string> | null>(null);
   const [eta, setEta] = useState(enquiry.deliveryDate);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [askLost, setAskLost] = useState(false);
 
   // Start from the catalogue's lowest price for each gift
   const start = () =>
@@ -729,17 +802,45 @@ function FinaliseOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { en
       Object.fromEntries(enquiry.products.map((p) => [p.id, String(byId.get(p.id)?.priceMin ?? "")])),
     );
 
+  const markLost = async () => {
+    setSaving(true);
+    try {
+      const updated = await updateEnquiryStatus(token, enquiry.id, "Lost", "Quote not agreed");
+      setAskLost(false);
+      onSaved(updated, `${enquiry.id} moved to Lost: quote not agreed`);
+    } catch (err) {
+      onError(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!prices) {
     return (
-      <div className="rounded-[24px] bg-lime p-5">
-        <p className="font-bold">Quote agreed?</p>
-        <p className="mt-1 text-sm text-ink-soft">
-          Add the final price per unit and a delivery date. The customer then sees the order and when it
-          arrives on their My orders page.
+      <div className="rounded-[24px] bg-card p-5">
+        <p className="font-bold">Did the customer agree to the quote?</p>
+        <p className="mt-1 text-sm text-muted">
+          Agreed: add the final prices and a delivery date, and it becomes their order. Not agreed: it moves
+          to Lost.
         </p>
-        <Button variant="dark" size="md" icon={PackageCheck} className="mt-4" onClick={start}>
-          Finalise order
-        </Button>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <Button variant="outline" size="md" icon={ThumbsDown} onClick={() => setAskLost(true)}>
+            Not agreed
+          </Button>
+          <Button variant="dark" size="md" icon={PackageCheck} onClick={start}>
+            Finalise order
+          </Button>
+        </div>
+        <ConfirmDialog
+          open={askLost}
+          title="Quote not agreed?"
+          body={`${enquiry.id} moves to Lost and the customer sees it as cancelled. You can reopen it later.`}
+          confirmLabel="Move to Lost"
+          cancelLabel="Go back"
+          loading={saving}
+          onConfirm={markLost}
+          onCancel={() => setAskLost(false)}
+        />
       </div>
     );
   }
@@ -755,7 +856,7 @@ function FinaliseOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { en
         expectedDelivery: eta,
         note: note.trim(),
       });
-      onSaved(updated, `${enquiry.id} confirmed as an order`);
+      onSaved(updated, `${enquiry.id} confirmed · tracking ${updated.order?.trackingNumber ?? ""}`);
     } catch (err) {
       onError(err);
     } finally {
@@ -775,6 +876,9 @@ function FinaliseOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { en
               <p className="text-xs text-muted">
                 {i.variants?.length ? `${describeVariants(i.variants)} · ` : ""}
                 {i.units} units
+                {i.customisations?.length
+                  ? ` · ${i.customisations.map((c) => CUSTOMISATION_META[c].short).join(", ")}`
+                  : ""}
               </p>
             </div>
             <label className="flex h-10 w-28 shrink-0 items-center gap-1 rounded-xl border border-line bg-canvas px-3 focus-within:border-ink">
@@ -812,6 +916,9 @@ function FinaliseOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { en
           placeholder="Mock-ups approved, production starts Monday."
           className={`${fieldCls} h-auto resize-none py-2.5`}
         />
+        <span className="mt-1.5 block text-xs text-muted">
+          A tracking number is created when you confirm, and the customer sees it straight away.
+        </span>
       </label>
 
       <div className="mt-5 flex items-center justify-between border-t border-line pt-4">
@@ -838,28 +945,69 @@ function FinaliseOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { en
   );
 }
 
-// After confirmation: move the order through production and delivery
-function ManageOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { enquiry: Enquiry }) {
-  const order = enquiry.order!;
-  const [stage, setStage] = useState<OrderStage>(order.stage);
-  const [eta, setEta] = useState(order.expectedDelivery);
-  const [note, setNote] = useState(order.note);
+// Lost: why and when, with a way back
+function ClosedCard({ enquiry, token, onSaved, onError }: SaveHandlers & { enquiry: Enquiry }) {
   const [saving, setSaving] = useState(false);
-  const dirty = stage !== order.stage || eta !== order.expectedDelivery || note !== order.note;
-
-  const save = async () => {
+  const reopen = async () => {
     setSaving(true);
     try {
-      const updated = await updateOrder(token, enquiry.id, {
-        stage,
-        expectedDelivery: eta,
-        note: note.trim(),
-      });
-      onSaved(updated, stage !== order.stage ? `${enquiry.id} moved to ${stage}` : `${enquiry.id} updated`);
+      onSaved(await updateEnquiryStatus(token, enquiry.id, "Contacted"), `${enquiry.id} reopened`);
     } catch (err) {
       onError(err);
     } finally {
       setSaving(false);
+    }
+  };
+  return (
+    <div className="rounded-[24px] bg-danger-soft p-5">
+      <p className="font-bold text-danger">Lost · {enquiry.closedReason ?? "Closed"}</p>
+      <p className="mt-1 text-sm text-ink-soft">
+        {enquiry.closedAt ? `Closed ${formatDate(enquiry.closedAt)}. ` : ""}The customer sees this as
+        cancelled.
+      </p>
+      <Button variant="outline" size="md" icon={RotateCcw} className="mt-4" loading={saving} onClick={reopen}>
+        Reopen enquiry
+      </Button>
+    </div>
+  );
+}
+
+// After confirmation: one stage at a time, forwards or back, with the date and note
+function ManageOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { enquiry: Enquiry }) {
+  const order = enquiry.order!;
+  const [eta, setEta] = useState(order.expectedDelivery);
+  const [note, setNote] = useState(order.note);
+  const [saving, setSaving] = useState<"back" | "forward" | "save" | null>(null);
+  const [copied, setCopied] = useState(false);
+  const dirty = eta !== order.expectedDelivery || note.trim() !== order.note;
+  const index = ORDER_STAGES.indexOf(order.stage);
+  const prev = nextStage(order.stage, -1);
+  const next = nextStage(order.stage, 1);
+
+  // Every save carries the date and note, so nothing typed is lost when moving a stage
+  const save = async (stage: OrderStage | undefined, kind: "back" | "forward" | "save") => {
+    setSaving(kind);
+    try {
+      const updated = await updateOrder(token, enquiry.id, {
+        ...(stage ? { stage } : {}),
+        expectedDelivery: eta,
+        note: note.trim(),
+      });
+      onSaved(updated, stage ? `${enquiry.id} moved to ${stage}` : `${enquiry.id} updated for the customer`);
+    } catch (err) {
+      onError(err);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const copyTracking = async () => {
+    try {
+      await navigator.clipboard.writeText(order.trackingNumber);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Clipboard blocked: the number is on screen
     }
   };
 
@@ -871,64 +1019,141 @@ function ManageOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { enqu
       </div>
       <p className="mt-0.5 text-xs text-muted">Confirmed {formatDate(order.confirmedAt)}</p>
 
-      <div
-        role="radiogroup"
-        aria-label="Order stage"
-        className="mt-4 grid grid-cols-4 gap-1 rounded-2xl bg-canvas p-1"
-      >
-        {ORDER_STAGES.map((s) => (
-          <button
-            key={s}
-            type="button"
-            role="radio"
-            aria-checked={stage === s}
-            onClick={() => setStage(s)}
-            className={`rounded-xl px-1 py-2 text-[11px] leading-tight font-semibold transition ${
-              stage === s ? "bg-ink text-white" : "text-muted hover:text-ink"
-            }`}
-          >
-            {s}
-          </button>
-        ))}
+      {/* Stage: ‹ Confirmed · In production · Dispatched · Delivered › */}
+      <div className="mt-4 flex items-center gap-2">
+        <StepButton
+          label={prev ? `Back to ${prev}` : "Already at the first stage"}
+          disabled={!prev || !!saving}
+          loading={saving === "back"}
+          onClick={() => prev && save(prev, "back")}
+        >
+          <ChevronLeft size={18} />
+        </StepButton>
+        <ol aria-label="Order stage" className="grid flex-1 grid-cols-4 gap-1">
+          {ORDER_STAGES.map((st, i) => (
+            <li key={st} aria-current={i === index ? "step" : undefined} className="min-w-0">
+              <span className={`block h-1.5 rounded-full ${i <= index ? "bg-lime-deep" : "bg-soft"}`} />
+              <span
+                className={`mt-1.5 block text-[10px] leading-tight font-semibold ${
+                  i === index ? "text-ink" : i < index ? "text-muted" : "text-faint"
+                }`}
+              >
+                {st}
+              </span>
+            </li>
+          ))}
+        </ol>
+        <StepButton
+          label={next ? `Forward to ${next}` : "Order delivered"}
+          disabled={!next || !!saving}
+          loading={saving === "forward"}
+          onClick={() => next && save(next, "forward")}
+        >
+          <ChevronRight size={18} />
+        </StepButton>
       </div>
 
-      <label className="mt-4 block">
+      <label className="mt-5 block">
         <span className="mb-1.5 block text-sm font-semibold">Delivery date</span>
         <input type="date" value={eta} onChange={(e) => setEta(e.target.value)} className={fieldCls} />
       </label>
-      <label className="mt-4 block">
+
+      <div className="mt-4">
         <span className="mb-1.5 block text-sm font-semibold">
           Note for the customer <span className="font-normal text-faint">(courier, tracking number)</span>
         </span>
-        <textarea
-          rows={2}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          className={`${fieldCls} h-auto resize-none py-2.5`}
-        />
-      </label>
+        <div className="overflow-hidden rounded-xl border border-line bg-canvas focus-within:border-ink focus-within:bg-card">
+          {order.trackingNumber ? (
+            <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
+              <span className="text-xs text-muted">
+                Tracking no. <span className="font-bold tracking-wide text-ink">{order.trackingNumber}</span>
+                <span className="ml-1.5 text-faint">· shown to the customer</span>
+              </span>
+              <button
+                type="button"
+                onClick={copyTracking}
+                aria-label="Copy tracking number"
+                className="grid size-7 place-items-center rounded-full text-muted hover:bg-soft hover:text-ink"
+              >
+                {copied ? <PackageCheck size={14} /> : <Copy size={14} />}
+              </button>
+            </div>
+          ) : null}
+          <textarea
+            rows={2}
+            aria-label="Note for the customer"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Shipped with BlueDart, arriving in 3 days."
+            className="block w-full resize-none bg-transparent px-3 py-2.5 text-sm outline-none"
+          />
+        </div>
+      </div>
 
-      <ul className="mt-4 divide-y divide-line border-t border-line text-sm">
+      <ul className="mt-4 space-y-2">
         {order.items.map((i) => (
-          <li key={i.id} className="flex justify-between gap-3 py-2.5">
-            <span className="min-w-0 truncate">{i.name}</span>
-            <span className="shrink-0 text-muted tabular-nums">
-              {i.units} × {formatINR(i.unitPrice)}
-            </span>
-          </li>
+          <GiftSpec key={i.id} item={i} />
         ))}
       </ul>
 
-      <Button
-        variant="dark"
-        size="md"
-        className="mt-2 w-full"
-        loading={saving}
-        disabled={!dirty || !eta}
-        onClick={save}
-      >
-        Save and update customer
-      </Button>
+      {next ? (
+        <Button
+          variant="dark"
+          size="md"
+          iconRight={ChevronRight}
+          className="mt-4 w-full"
+          loading={saving === "forward"}
+          disabled={!!saving}
+          onClick={() => save(next, "forward")}
+        >
+          Save and move to {next}
+        </Button>
+      ) : (
+        <p className="mt-4 rounded-full bg-lime-soft py-3 text-center text-sm font-semibold text-lime-ink">
+          Delivered {order.stageTimes?.Delivered ? formatDate(order.stageTimes.Delivered) : ""}
+        </p>
+      )}
+      {dirty ? (
+        <button
+          type="button"
+          disabled={!!saving || !eta}
+          onClick={() => save(undefined, "save")}
+          className="mt-2 w-full rounded-full py-2.5 text-sm font-semibold text-ink-soft transition hover:bg-soft disabled:opacity-50"
+        >
+          {saving === "save" ? "Saving…" : `Save note and date only, stay at ${order.stage}`}
+        </button>
+      ) : null}
     </div>
+  );
+}
+
+function StepButton({
+  label,
+  disabled,
+  loading,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled: boolean;
+  loading: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="grid size-10 shrink-0 place-items-center rounded-full border border-line bg-card transition hover:border-ink active:scale-95 disabled:opacity-35 disabled:hover:border-line"
+    >
+      {loading ? (
+        <span className="size-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+      ) : (
+        children
+      )}
+    </button>
   );
 }

@@ -44,12 +44,14 @@ export type Product = {
 
 export type VariantQty = { label: string; units: number };
 
-// One gift in an enquiry. Products with sizes or colours list units per variant
+// One gift in an enquiry. Products with sizes or colours list units per variant,
+// and each gift carries its own customisation (logo on the bottle, names on the hoodies)
 export type EnquiryItem = {
   id: string;
   name: string;
   units: number;
   variants?: VariantQty[];
+  customisations?: Customisation[];
 };
 
 export type EnquiryStatus = "New" | "Contacted" | "Converted" | "Lost";
@@ -64,7 +66,7 @@ export type EnquiryInput = {
   budget: BudgetBandId;
   deliveryDate: string; // ISO date (yyyy-mm-dd)
   products: EnquiryItem[];
-  customisations: Customisation[];
+  customisations: Customisation[]; // everything asked for across the gifts
   message: string;
 };
 
@@ -79,10 +81,16 @@ export type Order = {
   total: number;
   expectedDelivery: string; // ISO date (yyyy-mm-dd)
   stage: OrderStage;
-  note: string; // shown to the customer, e.g. courier and tracking number
+  stageTimes: Partial<Record<OrderStage, string>>; // when each stage was reached
+  trackingNumber: string; // created when the order is confirmed
+  note: string; // shown to the customer, e.g. courier details
   confirmedAt: string;
   updatedAt: string;
 };
+
+// Orders move one stage at a time, forwards or back
+export const nextStage = (stage: OrderStage, step: 1 | -1) =>
+  ORDER_STAGES[ORDER_STAGES.indexOf(stage) + step] as OrderStage | undefined;
 
 // What the admin fills in to finalise an order, and what can change afterwards
 export type OrderDraft = Pick<Order, "items" | "expectedDelivery" | "note">;
@@ -94,8 +102,14 @@ export type Enquiry = EnquiryInput & {
   status: EnquiryStatus;
   createdAt: string;
   respondBy: string; // the team promises a call back by this time
+  contactedAt?: string; // first marked Contacted
+  closedAt?: string; // marked Lost
+  closedReason?: string; // e.g. "Quote not agreed"
   order?: Order;
 };
 
 // What the customer needs to look up their own enquiry
 export type EnquiryRef = { id: string; phone: string };
+
+// Lookup from the Track form: a reference or a mobile number
+export type EnquiryLookup = { id: string } | { phone: string };

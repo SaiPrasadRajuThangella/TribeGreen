@@ -1,24 +1,27 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import type { Quantity } from "@/lib/items";
+import { type Choice, toggleIn } from "@/lib/items";
 import type { EnquiryFormValues } from "@/lib/validation";
-import type { EnquiryRef } from "@/types";
+import type { Customisation, EnquiryRef } from "@/types";
 
 /* ---------- Enquiry list: products the visitor wants a quote for ---------- */
 
-export type ListItem = Quantity & { productId: string };
+export type ListItem = Choice & { productId: string };
 
 type ListState = {
   items: ListItem[];
   open: boolean; // the slide-over drawer
   editing: string | null; // product whose sizes / colours are being picked
-  put: (productId: string, qty: Quantity) => void; // add, or replace the quantity
+  removing: string | null; // product waiting for "Are you sure?"
+  put: (productId: string, choice: Choice) => void; // add, or replace quantity and customisation
   remove: (productId: string) => void;
   setUnits: (productId: string, units: number) => void;
+  toggleCustomisation: (productId: string, c: Customisation) => void;
   clear: () => void;
   setOpen: (open: boolean) => void;
   setEditing: (productId: string | null) => void;
+  askRemove: (productId: string | null) => void;
 };
 
 export const useEnquiryList = create<ListState>()(
@@ -27,21 +30,30 @@ export const useEnquiryList = create<ListState>()(
       items: [],
       open: false,
       editing: null,
-      put: (productId, qty) =>
+      removing: null,
+      put: (productId, choice) =>
         set((s) => {
-          const item = { productId, ...qty };
+          const item = { productId, ...choice };
           return s.items.some((i) => i.productId === productId)
             ? { items: s.items.map((i) => (i.productId === productId ? item : i)) }
             : { items: [...s.items, item] };
         }),
-      remove: (productId) => set((s) => ({ items: s.items.filter((i) => i.productId !== productId) })),
+      remove: (productId) =>
+        set((s) => ({ items: s.items.filter((i) => i.productId !== productId), removing: null })),
       setUnits: (productId, units) =>
         set((s) => ({
           items: s.items.map((i) => (i.productId === productId ? { ...i, units: Math.max(1, units) } : i)),
         })),
+      toggleCustomisation: (productId, c) =>
+        set((s) => ({
+          items: s.items.map((i) =>
+            i.productId === productId ? { ...i, customisations: toggleIn(i.customisations, c) } : i,
+          ),
+        })),
       clear: () => set({ items: [] }),
       setOpen: (open) => set({ open }),
       setEditing: (editing) => set({ editing }),
+      askRemove: (removing) => set({ removing }),
     }),
     {
       name: "tg-enquiry-list",
@@ -76,16 +88,19 @@ export const useEnquiryDraft = create<DraftState>()(
 
 type MyEnquiriesState = {
   refs: EnquiryRef[];
-  add: (ref: EnquiryRef) => void;
+  add: (...refs: EnquiryRef[]) => void;
   remove: (id: string) => void;
+  setPhone: (id: string, phone: string) => void;
 };
 
 export const useMyEnquiries = create<MyEnquiriesState>()(
   persist(
     (set) => ({
       refs: [],
-      add: (ref) => set((s) => ({ refs: [ref, ...s.refs.filter((r) => r.id !== ref.id)] })),
+      add: (...refs) =>
+        set((s) => ({ refs: [...refs, ...s.refs.filter((r) => !refs.some((n) => n.id === r.id))] })),
       remove: (id) => set((s) => ({ refs: s.refs.filter((r) => r.id !== id) })),
+      setPhone: (id, phone) => set((s) => ({ refs: s.refs.map((r) => (r.id === id ? { ...r, phone } : r)) })),
     }),
     { name: "tg-my-enquiries", storage: createJSONStorage(() => localStorage) },
   ),

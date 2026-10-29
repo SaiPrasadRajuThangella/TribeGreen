@@ -6,13 +6,16 @@ import {
   Leaf,
   type LucideIcon,
   PartyPopper,
+  PenTool,
   Presentation,
   Shirt,
+  Stamp,
   Trophy,
+  Type,
   UserPlus,
 } from "lucide-react";
 
-import type { BudgetBand, Category, Occasion, Product } from "@/types";
+import type { BudgetBand, Category, Customisation, Occasion, Product } from "@/types";
 
 export const BUDGET_BANDS: BudgetBand[] = [
   { id: "under-500", label: "Under ₹500", min: 0, max: 499 },
@@ -41,6 +44,16 @@ export const OCCASION_META: Record<Occasion, { short: string; icon: LucideIcon }
   "Client and Vendor Gifting": { short: "Clients", icon: Handshake },
   "Events and Trade Shows": { short: "Events", icon: Presentation },
   "Employee Recognition": { short: "Recognition", icon: Trophy },
+};
+
+export const CUSTOMISATION_META: Record<Customisation, { short: string; hint: string; icon: LucideIcon }> = {
+  "Logo printing": { short: "Logo", hint: "Your logo printed or embroidered", icon: Stamp },
+  "Laser engraving": { short: "Engraving", hint: "Logo or text etched into the surface", icon: PenTool },
+  "Name personalisation": {
+    short: "Names",
+    hint: "Each piece carries a name. We collect the list after the quote",
+    icon: Type,
+  },
 };
 
 export const formatINR = (value: number) => `₹${value.toLocaleString("en-IN")}`;

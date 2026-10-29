@@ -10,10 +10,10 @@ import { useProducts } from "@/hooks/useProducts";
 import { useSeo } from "@/hooks/useSeo";
 import { createEnquiry } from "@/lib/api";
 import { REPLY_WITHIN_HOURS } from "@/lib/config";
-import { estimateFor, quantityProblem, toEnquiryItem } from "@/lib/items";
+import { allCustomisations, estimateFor, quantityProblem, toEnquiryItem } from "@/lib/items";
 import { type EnquiryFormErrors, type EnquiryFormValues, validateEnquiry } from "@/lib/validation";
 import { type EnquiryDraft, useEnquiryDraft, useEnquiryList, useMyEnquiries } from "@/store";
-import { CUSTOMISATIONS, type Customisation, OCCASIONS } from "@/types";
+import { OCCASIONS } from "@/types";
 
 const tomorrow = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 
@@ -59,29 +59,26 @@ export default function EnquiryPage() {
     [gifts],
   );
 
+  const products = gifts.map(({ item, product }) => toEnquiryItem(product, item));
   const form: EnquiryFormValues = {
     name: "",
     company: "",
     phone: "",
     email: "",
     deliveryDate: "",
-    customisations: [],
     message: "",
     ...draft,
     occasion: draft.occasion as EnquiryFormValues["occasion"],
     budget: draft.budget as EnquiryFormValues["budget"],
     units: totals.units,
-    products: gifts.map(({ item, product }) => toEnquiryItem(product, item)),
+    products,
+    // Chosen per gift; the enquiry also keeps the combined list (the app and CSV use it)
+    customisations: allCustomisations(products),
   };
 
   const set = <K extends keyof EnquiryDraft>(key: K, value: EnquiryDraft[K]) => {
     setField(key, value);
     setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
-  };
-
-  const toggleCustomisation = (c: Customisation) => {
-    const current = form.customisations ?? [];
-    set("customisations", current.includes(c) ? current.filter((x) => x !== c) : [...current, c]);
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -239,23 +236,8 @@ export default function EnquiryPage() {
                 </div>
               </Field>
             </div>
-          </Card>
 
-          <Card title="Customisation">
-            <div className="flex flex-wrap gap-2">
-              {CUSTOMISATIONS.map((c) => (
-                <Chip
-                  key={c}
-                  selected={form.customisations?.includes(c)}
-                  onClick={() => toggleCustomisation(c)}
-                >
-                  {c}
-                </Chip>
-              ))}
-            </div>
-            <p className="mt-3 text-xs text-faint">Pick all that apply, or none for plain gifts.</p>
-
-            <div className="mt-6">
+            <div className="mt-5">
               <Field label="Message" name="message" error={errors.message} optional>
                 <textarea
                   id="field-message"
@@ -268,6 +250,9 @@ export default function EnquiryPage() {
                 />
               </Field>
             </div>
+            <p className="mt-3 text-xs text-faint">
+              Logo printing, engraving and names are picked on each gift in your list.
+            </p>
           </Card>
         </div>
 

@@ -5,10 +5,11 @@ import { useEffect, useState } from "react";
 import { formatINR, formatPriceRange } from "@/data/catalog";
 import { useProducts } from "@/hooks/useProducts";
 import { useScrollLock } from "@/hooks/useScrollLock";
-import { defaultQuantity, estimateFor, type Quantity, quantityProblem } from "@/lib/items";
+import { type Choice, cleanCustomisations, defaultQuantity, estimateFor, quantityProblem } from "@/lib/items";
 import { useEnquiryList } from "@/store";
 import type { Product } from "@/types";
 
+import { CustomisationPicker } from "./CustomisationPicker";
 import { QuantityEditor } from "./QuantityEditor";
 import { Button } from "./ui";
 
@@ -29,8 +30,10 @@ export function ItemSheet() {
 function Sheet({ product, onClose }: { product: Product; onClose: () => void }) {
   const existing = useEnquiryList((s) => s.items.find((i) => i.productId === product.id));
   const put = useEnquiryList((s) => s.put);
-  const [qty, setQty] = useState<Quantity>(() =>
-    existing ? { units: existing.units, variants: existing.variants } : defaultQuantity(product),
+  const [qty, setQty] = useState<Choice>(() =>
+    existing
+      ? { units: existing.units, variants: existing.variants, customisations: existing.customisations }
+      : defaultQuantity(product),
   );
   const problem = quantityProblem(product, qty);
   const estimate = estimateFor(product, qty.units);
@@ -46,7 +49,7 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
 
   const save = () => {
     if (problem) return;
-    put(product.id, qty);
+    put(product.id, { ...qty, customisations: cleanCustomisations(product, qty.customisations) });
     onClose();
   };
 
@@ -91,7 +94,20 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
             Mix freely, for example 10 {a} and 10 {b}. {product.minOrder} units minimum in total.
           </p>
         </div>
-        <QuantityEditor product={product} value={qty} onChange={setQty} />
+        <QuantityEditor product={product} value={qty} onChange={(q) => setQty((c) => ({ ...c, ...q }))} />
+
+        {product.customisations.length ? (
+          <div className="mt-6">
+            <p className="mb-3 font-semibold">
+              Customise this gift <span className="text-sm font-normal text-muted">(optional)</span>
+            </p>
+            <CustomisationPicker
+              product={product}
+              value={qty.customisations}
+              onChange={(customisations) => setQty((c) => ({ ...c, customisations }))}
+            />
+          </div>
+        ) : null}
 
         <div className="mt-5 flex items-end justify-between rounded-2xl bg-card px-4 py-3">
           <div>

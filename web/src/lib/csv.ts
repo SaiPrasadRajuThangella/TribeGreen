@@ -3,9 +3,11 @@ import type { Enquiry, EnquiryItem } from "@/types";
 
 import { describeVariants } from "./items";
 
-// "Essential Hoodie × 60 (M × 20 · L × 40)"
+// "Essential Hoodie × 60 (M × 20 · L × 40) [Logo printing, Name personalisation]"
 const giftCell = (p: EnquiryItem) =>
-  `${p.name} × ${p.units}${p.variants?.length ? ` (${describeVariants(p.variants)})` : ""}`;
+  `${p.name} × ${p.units}${p.variants?.length ? ` (${describeVariants(p.variants)})` : ""}${
+    p.customisations?.length ? ` [${p.customisations.join(", ")}]` : ""
+  }`;
 
 const COLUMNS: [string, (e: Enquiry) => string | number][] = [
   ["Reference", (e) => e.id],
@@ -24,7 +26,9 @@ const COLUMNS: [string, (e: Enquiry) => string | number][] = [
   ["Products", (e) => e.products.map(giftCell).join("; ")],
   ["Customisation", (e) => e.customisations.join("; ")],
   ["Message", (e) => e.message],
+  ["Lost reason", (e) => (e.status === "Lost" ? (e.closedReason ?? "") : "")],
   ["Order stage", (e) => e.order?.stage ?? ""],
+  ["Tracking number", (e) => e.order?.trackingNumber ?? ""],
   ["Expected delivery", (e) => e.order?.expectedDelivery ?? ""],
   ["Order total", (e) => e.order?.total ?? ""],
 ];

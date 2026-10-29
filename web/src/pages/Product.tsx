@@ -5,18 +5,16 @@ import {
   type LucideIcon,
   MessageCircle,
   Package,
-  PenTool,
   Ruler,
   Send,
   Share2,
   ShoppingBag,
-  Stamp,
-  Type,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
+import { CustomisationPicker } from "@/components/CustomisationPicker";
 import { ProductCard } from "@/components/ProductCard";
 import { QuantityEditor } from "@/components/QuantityEditor";
 import { Button } from "@/components/ui";
@@ -25,18 +23,12 @@ import { useListToggle } from "@/hooks/useListToggle";
 import { useProducts } from "@/hooks/useProducts";
 import { shareImageFor, useSeo } from "@/hooks/useSeo";
 import { SITE_URL } from "@/lib/config";
-import { defaultQuantity, estimateFor, type Quantity, quantityProblem } from "@/lib/items";
+import { type Choice, cleanCustomisations, defaultQuantity, estimateFor, quantityProblem } from "@/lib/items";
 import { productWhatsAppMessage, whatsappUrl } from "@/lib/whatsapp";
 import { useEnquiryList } from "@/store";
-import { type Customisation, CUSTOMISATIONS, type Product } from "@/types";
+import type { Product } from "@/types";
 
 import NotFound from "./NotFound";
-
-const CUSTOM_ICONS: Record<Customisation, LucideIcon> = {
-  "Logo printing": Stamp,
-  "Laser engraving": PenTool,
-  "Name personalisation": Type,
-};
 
 export default function ProductPage() {
   const { id = "" } = useParams();
@@ -66,7 +58,7 @@ function ProductDetail({ product }: { product: Product }) {
   const listed = useEnquiryList((s) => s.items.find((i) => i.productId === product.id));
   const put = useEnquiryList((s) => s.put);
   const setOpen = useEnquiryList((s) => s.setOpen);
-  const [edited, setEdited] = useState<Quantity | null>(null);
+  const [edited, setEdited] = useState<Choice | null>(null);
   const [shared, setShared] = useState(false);
   const [tried, setTried] = useState(false);
 
@@ -76,7 +68,7 @@ function ProductDetail({ product }: { product: Product }) {
   );
 
   // What the visitor is editing, else what is already in their list, else a fresh start
-  const qty: Quantity = edited ?? listed ?? defaultQuantity(product);
+  const qty: Choice = edited ?? listed ?? defaultQuantity(product);
   const problem = quantityProblem(product, qty);
   const estimate = estimateFor(product, qty.units);
   const inList = !!listed;
@@ -107,7 +99,11 @@ function ProductDetail({ product }: { product: Product }) {
       setTried(true);
       return false;
     }
-    put(product.id, { units: qty.units, variants: qty.variants });
+    put(product.id, {
+      units: qty.units,
+      variants: qty.variants,
+      customisations: cleanCustomisations(product, qty.customisations),
+    });
     setEdited(null);
     return true;
   };
@@ -198,7 +194,11 @@ function ProductDetail({ product }: { product: Product }) {
                     <span className="text-sm font-semibold">Quantity by {optionName}</span>
                     <span className="text-xs text-muted">Mix freely · {product.minOrder} min in total</span>
                   </div>
-                  <QuantityEditor product={product} value={qty} onChange={setEdited} />
+                  <QuantityEditor
+                    product={product}
+                    value={qty}
+                    onChange={(q) => setEdited({ ...qty, ...q })}
+                  />
                   <div className="mt-4 flex items-center justify-between text-sm">
                     <span className="text-muted">Total</span>
                     <span className="font-bold tabular-nums">{qty.units.toLocaleString("en-IN")} units</span>
@@ -207,7 +207,11 @@ function ProductDetail({ product }: { product: Product }) {
               ) : (
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">Quantity</span>
-                  <QuantityEditor product={product} value={qty} onChange={setEdited} />
+                  <QuantityEditor
+                    product={product}
+                    value={qty}
+                    onChange={(q) => setEdited({ ...qty, ...q })}
+                  />
                 </div>
               )}
               <p className="mt-3 text-sm text-muted">
@@ -220,6 +224,18 @@ function ProductDetail({ product }: { product: Product }) {
                   {problem}
                 </p>
               ) : null}
+
+              {/* Customisation belongs to this gift, not the whole enquiry */}
+              <div className="mt-5 border-t border-line pt-5">
+                <p className="mb-3 text-sm font-semibold">
+                  Customise this gift <span className="font-normal text-muted">(optional)</span>
+                </p>
+                <CustomisationPicker
+                  product={product}
+                  value={qty.customisations}
+                  onChange={(customisations) => setEdited({ ...qty, customisations })}
+                />
+              </div>
               <div className="mt-5 hidden gap-3 sm:flex">
                 <Button
                   variant={inList && !dirty ? "dark" : "primary"}
@@ -271,30 +287,6 @@ function ProductDetail({ product }: { product: Product }) {
                   );
                 })}
               </div>
-            </Section>
-
-            <Section title="Make it yours">
-              <ul className="divide-y divide-line overflow-hidden rounded-[24px] bg-card">
-                {CUSTOMISATIONS.map((c) => {
-                  const Icon = CUSTOM_ICONS[c];
-                  const available = product.customisations.includes(c);
-                  return (
-                    <li key={c} className="flex items-center gap-3 px-5 py-4">
-                      <span
-                        className={`grid size-10 place-items-center rounded-full ${
-                          available ? "bg-lime-soft text-lime-ink" : "bg-soft text-faint"
-                        }`}
-                      >
-                        <Icon size={17} />
-                      </span>
-                      <span className={`flex-1 font-medium ${available ? "" : "text-faint"}`}>{c}</span>
-                      <span className={`text-sm font-medium ${available ? "text-lime-ink" : "text-faint"}`}>
-                        {available ? "Available" : "Not offered"}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
             </Section>
           </motion.div>
         </div>

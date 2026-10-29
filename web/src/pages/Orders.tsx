@@ -1,40 +1,31 @@
 import {
   ArrowRight,
   CalendarDays,
-  CheckCircle2,
+  ChevronRight,
   Clock,
   MessageCircle,
-  Package,
   PackageSearch,
   Search,
-  Truck,
 } from "lucide-react";
-import { motion } from "motion/react";
 import { useMemo, useState } from "react";
+import { Link } from "react-router";
 
+import { Badge, CallbackNumber, CardShell, ItemList, Progress } from "@/components/orders";
 import { Button, ButtonLink } from "@/components/ui";
 import { formatINR, getBudgetBand, OCCASION_META } from "@/data/catalog";
 import { useNow } from "@/hooks/useNow";
-import { useProducts } from "@/hooks/useProducts";
 import { useSeo } from "@/hooks/useSeo";
 import { useTrackedEnquiries } from "@/hooks/useTrackedEnquiries";
-import { trackEnquiries } from "@/lib/api";
+import { findEnquiries } from "@/lib/api";
 import { REPLY_WITHIN_HOURS } from "@/lib/config";
-import { describeVariants } from "@/lib/items";
+import { customerStatus } from "@/lib/orderStatus";
 import { daysUntil, formatDate, formatDay, formatTime, relativeDays, replyWindow } from "@/lib/time";
-import { normalisePhone } from "@/lib/validation";
+import { formatPhone, isValidPhone, normalisePhone } from "@/lib/validation";
 import { whatsappUrl } from "@/lib/whatsapp";
 import { useMyEnquiries } from "@/store";
-import { type Enquiry, type EnquiryItem, ORDER_STAGES, type OrderStage } from "@/types";
+import { type Enquiry, type EnquiryLookup, ORDER_STAGES } from "@/types";
 
 const QUOTE_STEPS = ["Enquiry sent", "Quote call", "Order confirmed", "Delivered"];
-
-const STAGE_ICON: Record<OrderStage, typeof Package> = {
-  Confirmed: CheckCircle2,
-  "In production": Package,
-  Dispatched: Truck,
-  Delivered: CheckCircle2,
-};
 
 export default function Orders() {
   useSeo({
@@ -68,7 +59,7 @@ export default function Orders() {
       <div className="mb-8 max-w-2xl">
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">My orders</h1>
         <p className="mt-2 text-muted">
-          Quotes and orders sent from this browser, with delivery dates. This page updates on its own.
+          Quotes and orders sent from this browser, with delivery dates. Open any of them to see every step.
         </p>
       </div>
 
@@ -152,114 +143,38 @@ function Group({ title, count, children }: { title: string; count: number; child
   );
 }
 
-function CardShell({ children }: { children: React.ReactNode }) {
+// The header row opens the order's own page
+function CardHeader({ enquiry: e, label, meta }: { enquiry: Enquiry; label: string; meta: string }) {
+  const status = customerStatus(e);
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="overflow-hidden rounded-[28px] bg-card"
+    <Link
+      to={`/orders/${e.id}`}
+      className="group flex flex-wrap items-start justify-between gap-3 p-5 transition hover:bg-canvas/50 sm:p-6"
     >
-      {children}
-    </motion.article>
-  );
-}
-
-function CardHeader({
-  label,
-  id,
-  meta,
-  badge,
-}: {
-  label: string;
-  id: string;
-  meta: string;
-  badge: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-wrap items-start justify-between gap-3 p-5 sm:p-6">
       <div>
         <p className="text-xs font-semibold tracking-wider text-muted uppercase">
-          {label} <span className="text-ink">{id}</span>
+          {label} <span className="text-ink">{e.id}</span>
         </p>
         <p className="mt-1 text-sm text-muted">{meta}</p>
       </div>
-      {badge}
-    </div>
+      <span className="flex items-center gap-2">
+        <Badge tone={status.tone}>{status.label}</Badge>
+        <span className="hidden items-center text-sm font-semibold text-muted group-hover:text-ink sm:flex">
+          Details <ChevronRight size={16} />
+        </span>
+      </span>
+    </Link>
   );
 }
 
-function Badge({ tone, children }: { tone: "lime" | "ink" | "blue" | "soft"; children: React.ReactNode }) {
-  const tones = {
-    lime: "bg-lime text-ink",
-    ink: "bg-ink text-white",
-    blue: "bg-[#E2EBF4] text-[#1F4A73]",
-    soft: "bg-soft text-ink-soft",
-  };
+function DetailsLink({ id }: { id: string }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${tones[tone]}`}
+    <Link
+      to={`/orders/${id}`}
+      className="flex items-center justify-center gap-1.5 border-t border-line py-3.5 text-sm font-semibold text-ink-soft transition hover:bg-canvas/60 hover:text-ink"
     >
-      {children}
-    </span>
-  );
-}
-
-// Thin segmented progress bar with a label under each step
-function Progress({ steps, current, dark }: { steps: readonly string[]; current: number; dark?: boolean }) {
-  return (
-    <ol className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
-      {steps.map((step, i) => {
-        const done = i <= current;
-        return (
-          <li key={step} aria-current={i === current ? "step" : undefined}>
-            <span
-              className={`block h-1.5 rounded-full ${done ? "bg-lime" : dark ? "bg-white/15" : "bg-soft"}`}
-            />
-            <span
-              className={`mt-2 block text-[11px] leading-tight font-medium ${
-                done ? (dark ? "text-white" : "text-ink") : dark ? "text-white/45" : "text-faint"
-              }`}
-            >
-              {step}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function ItemList({ items }: { items: (EnquiryItem & { unitPrice?: number })[] }) {
-  const { byId } = useProducts();
-  return (
-    <ul className="divide-y divide-line px-5 sm:px-6">
-      {items.map((item) => (
-        <li key={item.id} className="flex items-center gap-3 py-4">
-          <img
-            src={byId.get(item.id)?.images[0]}
-            alt=""
-            className="size-14 shrink-0 rounded-2xl bg-soft object-cover"
-          />
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-semibold">{item.name}</p>
-            <p className="text-xs text-muted">
-              {item.variants?.length ? describeVariants(item.variants) : byId.get(item.id)?.category}
-            </p>
-          </div>
-          {item.unitPrice ? (
-            <div className="text-right">
-              <p className="font-semibold tabular-nums">{formatINR(item.units * item.unitPrice)}</p>
-              <p className="text-xs text-muted tabular-nums">
-                {item.units} × {formatINR(item.unitPrice)}
-              </p>
-            </div>
-          ) : (
-            <p className="shrink-0 text-sm font-semibold tabular-nums">{item.units} units</p>
-          )}
-        </li>
-      ))}
-    </ul>
+      See every step <ArrowRight size={15} />
+    </Link>
   );
 }
 
@@ -271,40 +186,34 @@ function OrderCard({ enquiry: e, now }: { enquiry: Enquiry; now: number }) {
     return (
       <CardShell>
         <CardHeader
+          enquiry={e}
           label="Order"
-          id={e.id}
           meta={`${OCCASION_META[e.occasion].short} · ${e.units} units`}
-          badge={<Badge tone="ink">Confirmed</Badge>}
         />
         <p className="mx-5 mb-2 rounded-2xl bg-lime-soft p-4 text-sm text-lime-ink sm:mx-6">
           Your order is confirmed. The final invoice and delivery date will appear here shortly.
         </p>
         <ItemList items={e.products} />
+        <DetailsLink id={e.id} />
       </CardShell>
     );
   }
 
   const days = daysUntil(order.expectedDelivery, now);
-  const StageIcon = STAGE_ICON[order.stage];
 
   return (
     <CardShell>
       <CardHeader
+        enquiry={e}
         label="Order"
-        id={e.id}
         meta={`Confirmed ${formatDate(order.confirmedAt)} · ${OCCASION_META[e.occasion].short}`}
-        badge={
-          <Badge tone="lime">
-            <StageIcon size={14} /> {order.stage}
-          </Badge>
-        }
       />
 
       <div className="mx-5 rounded-[22px] bg-ink p-5 text-white sm:mx-6">
         <p className="text-xs text-white/60">
           {order.stage === "Dispatched" ? "Arriving by" : "Expected delivery"}
         </p>
-        <div className="mt-1 mb-5 flex flex-wrap items-baseline justify-between gap-2">
+        <div className="mt-1 mb-1 flex flex-wrap items-baseline justify-between gap-2">
           <p className="text-2xl font-extrabold tracking-tight sm:text-3xl">
             {formatDay(order.expectedDelivery)}
           </p>
@@ -312,6 +221,14 @@ function OrderCard({ enquiry: e, now }: { enquiry: Enquiry; now: number }) {
             {days < 0 ? "Running late, we'll update you" : relativeDays(days)}
           </span>
         </div>
+        {order.trackingNumber ? (
+          <p className="mb-5 text-xs text-white/60">
+            Tracking no.{" "}
+            <span className="font-semibold tracking-wide text-white">{order.trackingNumber}</span>
+          </p>
+        ) : (
+          <div className="mb-5" />
+        )}
         <Progress steps={ORDER_STAGES} current={ORDER_STAGES.indexOf(order.stage)} dark />
       </div>
 
@@ -332,10 +249,7 @@ function OrderCard({ enquiry: e, now }: { enquiry: Enquiry; now: number }) {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4 text-sm sm:px-6">
-        <span className="text-muted">
-          {e.customisations.length ? e.customisations.join(", ") : "No customisation"}
-        </span>
+      <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-5 py-4 text-sm sm:px-6">
         <a
           href={whatsappUrl(`Hi Tribe Green! I have a question about my order ${e.id}.`)}
           target="_blank"
@@ -345,6 +259,7 @@ function OrderCard({ enquiry: e, now }: { enquiry: Enquiry; now: number }) {
           <MessageCircle size={15} /> Ask about this order
         </a>
       </div>
+      <DetailsLink id={e.id} />
     </CardShell>
   );
 }
@@ -356,10 +271,9 @@ function QuoteCard({ enquiry: e, now }: { enquiry: Enquiry; now: number }) {
   return (
     <CardShell>
       <CardHeader
+        enquiry={e}
         label="Enquiry"
-        id={e.id}
         meta={`Sent ${formatDate(e.createdAt)}, ${formatTime(e.createdAt)}`}
-        badge={contacted ? <Badge tone="blue">Quote shared</Badge> : <Badge tone="soft">Quote coming</Badge>}
       />
 
       <div className="mx-5 sm:mx-6">
@@ -373,7 +287,7 @@ function QuoteCard({ enquiry: e, now }: { enquiry: Enquiry; now: number }) {
         ) : (
           <div className="flex items-start gap-3 rounded-[22px] bg-lime-soft p-4">
             <Clock size={20} className="mt-0.5 shrink-0 text-lime-ink" />
-            <div className="text-sm">
+            <div className="min-w-0 flex-1 text-sm">
               {reply.overdue ? (
                 <>
                   <p className="font-semibold">Our team will call you very soon</p>
@@ -384,11 +298,12 @@ function QuoteCard({ enquiry: e, now }: { enquiry: Enquiry; now: number }) {
               ) : (
                 <>
                   <p className="font-semibold">Expect a call by {formatTime(e.respondBy)}</p>
-                  <p className="mt-0.5 text-ink-soft">
-                    In about {reply.label}. We'll call {e.phone}.
-                  </p>
+                  <p className="mt-0.5 text-ink-soft">In about {reply.label}.</p>
                 </>
               )}
+              <div className="mt-1 text-ink-soft">
+                <CallbackNumber enquiry={e} />
+              </div>
             </div>
           </div>
         )}
@@ -410,26 +325,37 @@ function QuoteCard({ enquiry: e, now }: { enquiry: Enquiry; now: number }) {
           Budget <span className="font-semibold text-ink">{getBudgetBand(e.budget)?.label} / unit</span>
         </span>
       </div>
+      <DetailsLink id={e.id} />
     </CardShell>
   );
 }
 
+// Past orders and cancelled enquiries: the whole row opens the details page
 function PastCard({ enquiry: e }: { enquiry: Enquiry }) {
   const delivered = e.order?.stage === "Delivered";
+  const status = customerStatus(e);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[24px] bg-card px-5 py-4">
-      <div className="min-w-0">
+    <Link
+      to={`/orders/${e.id}`}
+      className="group flex flex-wrap items-center justify-between gap-3 rounded-[24px] bg-card px-5 py-4 transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-22px_rgba(18,18,18,0.4)]"
+    >
+      <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold tracking-wider text-muted">{e.id}</p>
         <p className="mt-0.5 truncate text-sm font-semibold">{e.products.map((p) => p.name).join(", ")}</p>
+        <p className="mt-0.5 text-xs text-muted">
+          {delivered
+            ? `Delivered ${formatDay(e.order!.stageTimes?.Delivered ?? e.order!.expectedDelivery)}`
+            : (e.closedReason ?? "Closed")}
+        </p>
       </div>
-      {delivered ? (
-        <Badge tone="ink">
-          <CheckCircle2 size={14} /> Delivered {formatDay(e.order!.expectedDelivery)}
-        </Badge>
-      ) : (
-        <Badge tone="soft">Closed</Badge>
-      )}
-    </div>
+      <span className="flex items-center gap-2">
+        <Badge tone={status.tone}>{status.label}</Badge>
+        <ChevronRight
+          size={18}
+          className="text-muted transition group-hover:translate-x-0.5 group-hover:text-ink"
+        />
+      </span>
+    </Link>
   );
 }
 
@@ -451,68 +377,80 @@ function EmptyState() {
   );
 }
 
-// Look up an enquiry made on another device: reference + the phone number used
+// "TG-5RT9LP", "tg 5rt9lp", "5RT9LP" → a reference; 10 digits (with or without +91) → a phone number
+function parseLookup(raw: string): EnquiryLookup | null {
+  const value = raw.trim();
+  if (!value) return null;
+  if (/[a-z]/i.test(value)) {
+    const code = value
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .replace(/^TG/, "");
+    return code.length >= 4 ? { id: `TG-${code}` } : null;
+  }
+  return isValidPhone(value) ? { phone: normalisePhone(value) } : null;
+}
+
+type TrackState = { kind: "idle" | "loading" | "invalid" | "missing" } | { kind: "found"; text: string };
+
+// Look up enquiries made on another device: the reference or the mobile number is enough
 function TrackForm() {
-  const addRef = useMyEnquiries((s) => s.add);
-  const [id, setId] = useState("");
-  const [phone, setPhone] = useState("");
-  const [state, setState] = useState<"idle" | "loading" | "found" | "missing">("idle");
+  const addRefs = useMyEnquiries((s) => s.add);
+  const [value, setValue] = useState("");
+  const [state, setState] = useState<TrackState>({ kind: "idle" });
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const ref = { id: id.trim().toUpperCase(), phone: normalisePhone(phone) };
-    if (!ref.id || ref.phone.length < 10) return setState("missing");
-    setState("loading");
+    const lookup = parseLookup(value);
+    if (!lookup) return setState({ kind: "invalid" });
+    setState({ kind: "loading" });
     try {
-      const [found] = await trackEnquiries([ref]);
-      if (!found) return setState("missing");
-      addRef(ref);
-      setState("found");
-      setId("");
-      setPhone("");
+      const found = await findEnquiries(lookup);
+      if (!found.length) return setState({ kind: "missing" });
+      addRefs(...found.map((f) => ({ id: f.id, phone: f.phone })));
+      setValue("");
+      setState({
+        kind: "found",
+        text:
+          "id" in lookup
+            ? `Found ${lookup.id}. It's now on this page.`
+            : `Found ${found.length} ${found.length === 1 ? "order" : "orders"} for ${formatPhone(lookup.phone)}.`,
+      });
     } catch {
-      setState("missing");
+      setState({ kind: "missing" });
     }
   };
-
-  const input =
-    "h-12 w-full rounded-2xl border border-line bg-canvas px-4 text-[15px] outline-none transition placeholder:text-faint focus:border-ink focus:bg-card";
 
   return (
     <form onSubmit={submit} noValidate className="rounded-[28px] bg-card p-6">
       <p className="font-bold">Track an order</p>
-      <p className="mt-1 mb-4 text-sm text-muted">Sent from another device? Add it with your reference.</p>
-      <div className="space-y-3">
-        <label className="block">
-          <span className="sr-only">Reference</span>
-          <input
-            value={id}
-            onChange={(e) => setId(e.target.value)}
-            placeholder="Reference, e.g. TG-5RT9LP"
-            autoCapitalize="characters"
-            className={`${input} uppercase placeholder:normal-case`}
-          />
-        </label>
-        <label className="block">
-          <span className="sr-only">Mobile number</span>
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder="Mobile number used"
-            className={input}
-          />
-        </label>
-      </div>
-      {state === "missing" ? (
+      <p className="mt-1 mb-4 text-sm text-muted">
+        Sent from another device? Enter the reference or the mobile number.
+      </p>
+      <label className="block">
+        <span className="sr-only">Reference or mobile number</span>
+        <input
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            if (state.kind !== "loading") setState({ kind: "idle" });
+          }}
+          placeholder="TG-5RT9LP or 98765 43210"
+          autoCapitalize="characters"
+          className="h-12 w-full rounded-2xl border border-line bg-canvas px-4 text-[15px] transition outline-none placeholder:text-faint focus:border-ink focus:bg-card"
+        />
+      </label>
+      {state.kind === "invalid" ? (
         <p role="alert" className="mt-3 text-sm text-danger">
-          No enquiry matches that reference and number.
+          Enter a reference like TG-5RT9LP or a 10-digit mobile number.
         </p>
-      ) : state === "found" ? (
+      ) : state.kind === "missing" ? (
+        <p role="alert" className="mt-3 text-sm text-danger">
+          Nothing found. Check the reference or try the number you used.
+        </p>
+      ) : state.kind === "found" ? (
         <p role="status" className="mt-3 text-sm font-medium text-lime-ink">
-          Found it. It's now on this page.
+          {state.text}
         </p>
       ) : null}
       <Button
@@ -520,7 +458,7 @@ function TrackForm() {
         variant="dark"
         size="md"
         icon={Search}
-        loading={state === "loading"}
+        loading={state.kind === "loading"}
         className="mt-4 w-full"
       >
         Find my order

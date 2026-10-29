@@ -11,7 +11,8 @@ export function useTrackedEnquiries() {
   const refs = useMyEnquiries((s) => s.refs);
   const [enquiries, setEnquiries] = useState<Enquiry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const key = refs.map((r) => r.id).join(",");
+  // Reload when an enquiry is added or its call-back number changes
+  const key = refs.map((r) => `${r.id}:${r.phone}`).join(",");
 
   useEffect(() => {
     let alive = true;

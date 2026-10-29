@@ -2,6 +2,7 @@ import { ArrowRight, Check, Clock, MessageCircle, PackageSearch } from "lucide-r
 import { motion } from "motion/react";
 import { Link, useLocation, useParams } from "react-router";
 
+import { CustomisationTags } from "@/components/orders";
 import { ButtonLink } from "@/components/ui";
 import { getBudgetBand, OCCASION_META } from "@/data/catalog";
 import { useSeo } from "@/hooks/useSeo";
@@ -74,8 +75,9 @@ export default function ThankYou() {
                   <span className="min-w-0">
                     <span className="block font-semibold">{p.name}</span>
                     {p.variants?.length ? (
-                      <span className="text-xs text-muted">{describeVariants(p.variants)}</span>
+                      <span className="block text-xs text-muted">{describeVariants(p.variants)}</span>
                     ) : null}
+                    <CustomisationTags item={p} />
                   </span>
                   <span className="shrink-0 font-semibold tabular-nums">{p.units} units</span>
                 </div>

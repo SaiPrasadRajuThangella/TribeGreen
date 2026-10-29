@@ -8,6 +8,14 @@ const PHONE_RE = /^(?:\+?91|0)?[6-9]\d{9}$/;
 
 export const normalisePhone = (value: string) => value.replace(/[\s-]/g, "");
 
+export const isValidPhone = (value: string) => PHONE_RE.test(normalisePhone(value));
+
+// "+91 98765 43210"
+export function formatPhone(value: string) {
+  const digits = normalisePhone(value).replace(/\D/g, "").slice(-10);
+  return digits.length === 10 ? `+91 ${digits.slice(0, 5)} ${digits.slice(5)}` : value;
+}
+
 const variantSchema = z.object({ label: z.string().min(1), units: z.number().int().min(1) });
 
 // Each gift needs 10+ units; for sizes / colours the split has to add up to the total
@@ -17,6 +25,7 @@ const itemSchema = z
     name: z.string().min(1),
     units: z.number().int().min(MIN_ORDER, `Each gift needs at least ${MIN_ORDER} units`),
     variants: z.array(variantSchema).optional(),
+    customisations: z.array(z.enum(CUSTOMISATIONS)).optional(),
   })
   .refine(
     (item) => !item.variants || item.variants.reduce((sum, v) => sum + v.units, 0) === item.units,

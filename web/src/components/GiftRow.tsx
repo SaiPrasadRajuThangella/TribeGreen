@@ -3,10 +3,13 @@ import { memo } from "react";
 import { Link } from "react-router";
 
 import { formatPriceRange } from "@/data/catalog";
+import { useProducts } from "@/hooks/useProducts";
 import { quantityProblem } from "@/lib/items";
 import { type ListItem, useEnquiryList } from "@/store";
 import type { Product } from "@/types";
 
+import { ConfirmDialog } from "./ConfirmDialog";
+import { CustomisationPills } from "./CustomisationPicker";
 import { NumberStepper } from "./QuantityEditor";
 
 // A gift in the enquiry list: units for plain gifts, a size / colour split for the rest
@@ -23,8 +26,9 @@ export const GiftRow = memo(function GiftRow({
   showProblem?: boolean;
   onNavigate?: () => void;
 }) {
-  const remove = useEnquiryList((s) => s.remove);
+  const askRemove = useEnquiryList((s) => s.askRemove);
   const setUnits = useEnquiryList((s) => s.setUnits);
+  const toggleCustomisation = useEnquiryList((s) => s.toggleCustomisation);
   const setEditing = useEnquiryList((s) => s.setEditing);
   const problem = showProblem ? quantityProblem(product, item) : null;
   const optionName = product.option?.name.toLowerCase();
@@ -46,7 +50,7 @@ export const GiftRow = memo(function GiftRow({
           </div>
           <button
             type="button"
-            onClick={() => remove(product.id)}
+            onClick={() => askRemove(product.id)}
             aria-label={`Remove ${product.name}`}
             className="grid size-8 shrink-0 place-items-center rounded-full text-muted hover:bg-danger-soft hover:text-danger"
           >
@@ -92,8 +96,34 @@ export const GiftRow = memo(function GiftRow({
             <span className="text-xs text-faint">units</span>
           </div>
         )}
+        <CustomisationPills
+          product={product}
+          value={item.customisations}
+          onToggle={(c) => toggleCustomisation(product.id, c)}
+        />
         {problem ? <p className="text-xs text-danger">{problem}</p> : null}
       </div>
     </div>
   );
 });
+
+// One "Are you sure?" for the whole site, opened from any gift row
+export function RemoveGiftDialog() {
+  const removing = useEnquiryList((s) => s.removing);
+  const askRemove = useEnquiryList((s) => s.askRemove);
+  const remove = useEnquiryList((s) => s.remove);
+  const { byId } = useProducts();
+  const name = removing ? (byId.get(removing)?.name ?? "this gift") : "";
+
+  return (
+    <ConfirmDialog
+      open={!!removing}
+      title={`Remove ${name}?`}
+      body="Its quantities and customisation will be cleared from your enquiry list."
+      confirmLabel="Remove"
+      cancelLabel="Keep it"
+      onConfirm={() => removing && remove(removing)}
+      onCancel={() => askRemove(null)}
+    />
+  );
+}
