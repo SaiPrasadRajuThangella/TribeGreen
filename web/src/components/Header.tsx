@@ -11,7 +11,8 @@ const NAV = [
   { to: "/catalogue", label: "Catalogue" },
   { to: "/catalogue?occasion=Corporate+Diwali+Gifting", label: "Diwali gifting" },
   { to: "/catalogue?occasion=Employee+Onboarding", label: "Onboarding kits" },
-  { to: "/catalogue?occasion=Client+and+Vendor+Gifting", label: "Client gifts" },
+  // Only on wide screens in the header bar; always in the menu
+  { to: "/catalogue?occasion=Client+and+Vendor+Gifting", label: "Client gifts", wideOnly: true },
 ];
 
 export function Logo() {
@@ -61,9 +62,9 @@ export function Header() {
               to={item.to}
               end
               className={({ isActive }) =>
-                `rounded-full px-4 py-2 text-sm font-medium transition hover:bg-card ${
+                `rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition hover:bg-card ${
                   isActive && item.to === "/catalogue" ? "bg-card" : ""
-                }`
+                } ${item.wideOnly ? "max-xl:hidden" : ""}`
               }
             >
               {item.label}
