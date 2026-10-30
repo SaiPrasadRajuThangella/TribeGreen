@@ -6,38 +6,53 @@ A small catalogue and enquiry system for Tribe Green (corporate gifting), built 
 
 ```
 tribe-green/
-├── backend/   Node.js + Express + MongoDB API
-├── web/       React + Vite website and admin page
-└── mobile/    React Native (Expo) Android app
+├── package.json   one-command scripts for the whole repo
+├── backend/       Node.js + Express + MongoDB API
+├── web/           React + Vite website and admin page
+└── mobile/        React Native (Expo) Android app
 ```
 
-Each folder is its own project with its own `package.json`. Run each one from inside its folder.
+A monorepo: the root starts everything, and each folder is still its own project with its own `package.json`, so it can also be run, built and deployed on its own.
 
-**Requires Node.js 22.13 or newer** for the mobile app (Expo SDK 58). The backend and website run on Node 20.19 or newer.
+**Requires Node.js 22.13 or newer** (Expo SDK 58 needs it). With nvm: `nvm use 22.17.0` (see `.nvmrc`).
 
 ## Quick start
 
-Two terminals:
+From the repo root:
 
 ```bash
-cd backend
 npm install
 npm run dev
 ```
 
-```bash
-cd web
-npm install
-npm run dev
-```
+`npm install` also installs `backend/`, `web/` and `mobile/`. `npm run dev` starts all three:
 
-Open http://localhost:5173. The website forwards `/api` to the backend on port 4000.
+| Part | Address |
+|---|---|
+| API (with a local MongoDB in `backend/.data`) | http://localhost:4000 |
+| Website and admin | http://localhost:5173 |
+| App (Expo / Metro) | http://localhost:8081 |
+
+The website forwards `/api` to the backend. The app finds the backend on the same computer by itself.
+
+| Command (root) | What it does |
+|---|---|
+| `npm run dev` | API + website + app |
+| `npm run dev:site` | API + website only |
+| `npm run dev:backend` / `dev:web` / `dev:mobile` | One part on its own |
+| `npm test` | Backend API tests |
+| `npm run build` | Build the backend and the website |
+| `npm run check` | Type-check and lint all three |
+
+**On a phone:** run the API first (`npm run dev:site`), then `npm run dev:mobile` in a second terminal and scan its QR code with Expo Go. The phone must be on the same Wi-Fi as the computer. The QR code only shows when the app runs in its own terminal, not inside `npm run dev`.
+
+Each folder on its own works too, e.g. `cd backend && npm install && npm run dev`.
 
 ### Demo logins
 
 | Who | Where | Login |
 |---|---|---|
-| Customer | http://localhost:5173/login | Mobile `9999999999`, code `123456` |
+| Customer | Website `/login` or the app | Mobile `9999999999`, code `123456` |
 | Admin | http://localhost:5173/admin | The `ADMIN_USERNAME` / `ADMIN_PASSWORD` in `backend/.env.example` |
 
 No SMS provider is connected yet, so every number's sign-in code is `123456` (`OTP_MODE=fixed`). Any other number signs up a new customer, who then adds a name, company and email.
@@ -74,11 +89,11 @@ Errors come back as `{ message, errors? }`, where `errors` maps a field to its m
 
 | Method | Path | Who | Used for |
 |---|---|---|---|
-| GET | `/api/products`, `/api/products/:id` | Anyone | Catalogue |
+| GET | `/api/products`, `/api/products/:id` | Anyone | Catalogue: `basePrice` and `customisationPrices`, plus the worked-out `customisations`, `priceMin` (plain) and `priceMax` (every customisation) |
 | POST | `/api/auth/otp` | Anyone | `{ phone }`: send a sign-in code |
 | POST | `/api/auth/verify` | Anyone | `{ phone, code }` → `{ token, user }`. Creates the account for a new number |
 | GET, PATCH | `/api/me` | Customer | The profile; PATCH `{ name, company, email }` completes it |
-| POST | `/api/enquiries` | Anyone | Send an enquiry. Signed in, it's linked to the account (the website always signs in; the app has no accounts yet). Returns it with `id` and `respondBy` (2 hours later) |
+| POST | `/api/enquiries` | Anyone | Send an enquiry (`source: "website"` or `"app"`). Signed in, it's linked to the account; both the website and the app sign in first. Returns it with `id`, `respondBy` (2 hours later), each gift's `listPrice` and the `budget` band worked out from the gifts |
 | GET | `/api/my/enquiries`, `/api/my/enquiries/:id` | Customer | Their enquiries and orders |
 | PATCH | `/api/my/enquiries/:id/phone` | Customer | `{ phone }`: change the call-back number |
 | POST | `/api/admin/login` | Anyone | `{ username, password }` → `{ token }` |
@@ -124,12 +139,20 @@ Open http://localhost:5173.
 | Admin login | `/admin/login` | Sign in to the admin page |
 | Admin | `/admin` | All enquiries from the website and the app, with source, status (New, Contacted, Converted, Lost), a 2-hour call-back timer, search, filters, a details panel and CSV download. The details panel shows each gift's sizes / colours and customisation. If the quote is agreed, the admin finalises the order (price per unit, delivery date, note) and a tracking number is created; if not, it moves to Lost with the reason. Orders then move one stage at a time, forwards or back: Confirmed, In production, Dispatched, Delivered |
 
+### Pricing
+
+- Every gift has a **base price** per unit (plain) and a set **extra per unit for each customisation** it offers. For example, the bottle is ₹380, + ₹30 logo, + ₹50 engraving, + ₹30 names.
+- The range shown is **plain → fully customised** (₹380 – ₹490). The price per unit is the base plus what was picked, so more customisation costs more.
+- The list, form and My orders show an exact estimate (units × price). The admin's final price per unit starts from that list price and can be changed.
+- The form doesn't ask for a budget. The brief's "budget per unit" is worked out by the server from the gifts (estimated total ÷ units) and shown in the admin and the CSV.
+- Prices live in `backend/src/data/products.ts` (`basePrice`, `customisationPrices`) and are worked out in `backend/src/lib/pricing.ts`.
+
 ### Quantities
 
 - Every gift starts at **10 units**.
 - Gifts with sizes (hoodie, polo) or colours (bottle, cap, yoga kit) are ordered per variant, and the variants add up to the total. Adding one from the catalogue opens a picker.
 - Each gift has its own customisation, limited to what that product offers (a hoodie can't be laser engraved).
-- The enquiry stores each gift as `{ id, name, units, variants?: [{ label, units }], customisations? }`. The enquiry-level `customisations` list (from the brief) is everything picked across the gifts.
+- The enquiry stores each gift as `{ id, name, units, variants?: [{ label, units }], customisations?, listPrice }`. The enquiry-level `customisations` list (from the brief) is everything picked across the gifts.
 
 ### Page title, description and share image
 
@@ -152,35 +175,42 @@ Everything comes from the backend: products, sign-in, enquiries, orders and the 
 
 **Stack:** Expo SDK 58 · Expo Router · NativeWind (Tailwind) · Reanimated · FlashList · Zustand + AsyncStorage · Zod · Plus Jakarta Sans
 
+Start the API first (`npm run dev:site` from the root), then:
+
 ```bash
 cd mobile
 npm install
 npx expo start
 ```
 
-Then press `a` for an Android emulator, or scan the QR code with **Expo Go** on an Android phone.
+Then press `a` for an Android emulator, or scan the QR code with **Expo Go** on an Android phone on the same Wi-Fi.
+
+The app follows the same flow as the website, on the same backend and accounts: browse, pick sizes and customisation per gift, sign in with your mobile number, send, then track the call back and the order in Orders. Enquiries arrive in the admin marked **App**, and everything the admin changes shows up in the app.
 
 ### Screens
 
 | Screen | What it does |
 |---|---|
-| Onboarding | First-launch welcome, shown once |
-| Home | Promo banners, categories, bestsellers, gift by occasion |
-| Catalogue | Search plus filters by category, occasion and budget band |
-| Product detail | Photo, price range, occasions, customisation, WhatsApp button with a pre-filled message |
-| Enquiry list | Products picked for a quote, units per product, estimated budget |
-| Enquiry form | All brief fields, validated (phone, email, quantity, date) |
-| Thank you | Confirmation with the enquiry reference |
-| My enquiries | Every enquiry sent from this phone, saved on the device |
+| Onboarding | First-launch welcome: sign in or create an account, or browse first |
+| Home | Promo banners, categories, bestsellers, gift by occasion; Sign in, or your initials (opens Orders) |
+| Catalogue | Search plus filters by occasion, budget and category (one, several or all) |
+| Product detail | Price range (plain → fully customised), quantity by size / colour, customisation with what each adds, live price per unit and total, WhatsApp button |
+| Size picker | Sheet for sizes / colours and customisation, from a product card or the list |
+| Enquiry list | Each gift with its split, customisation pills and price; removing asks first; exact estimated total |
+| Sign in | Mobile number, 6-digit code, and a one-time profile for new numbers |
+| Enquiry form | All brief fields, filled in from the account and saved as you type; sending needs sign-in |
+| Thank you | Reference, call-back time, gifts and estimated total |
+| Orders | Current orders (delivery date, tracking number, progress, team's note), quotes waiting with a call-back countdown and "Change number", and past ones. Refreshes on its own and with pull to refresh |
+| Order details | Every step with its date and time, gifts and prices, contact details |
 
 ### Data
 
-The app still runs on mock data (`mobile/src/data/products.ts`), and submitted enquiries are saved on the phone. It isn't connected to the backend yet: it first needs the website's per-gift units, sizes and customisation, because the API checks them. After that, set `EXPO_PUBLIC_API_URL` in `mobile/.env`.
+Everything comes from the backend. In development the app uses the computer running Expo, port 4000 (`mobile/src/lib/config.ts`). For a deployed API, set `EXPO_PUBLIC_API_URL` in `mobile/.env` (see `mobile/.env.example`). The gift list, the form draft and the sign-in are kept on the phone.
 
 Product photos are free images from [Unsplash](https://unsplash.com).
 
 ## Not done yet
 
 - **Real SMS codes.** Sign-in codes are fixed to `123456`; `OTP_MODE=console` prints random ones in the server log instead. Sending them needs an SMS provider (e.g. MSG91 or Twilio) in `backend/src/lib/otp.ts`.
-- **The Android app** isn't connected to the backend and has no sizes, per-gift customisation, accounts or order tracking yet.
+- **The APK.** Build it with EAS (`npx eas-cli build -p android --profile preview`), which needs an Expo account, and set `EXPO_PUBLIC_API_URL` to the deployed API first.
 - **Not deployed.** The steps above need your own GitHub, Render, Atlas and Vercel accounts.
