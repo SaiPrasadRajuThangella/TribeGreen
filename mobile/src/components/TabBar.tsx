@@ -1,5 +1,5 @@
 import type { BottomTabBarProps } from "expo-router/js-tabs";
-import { ClipboardList, Home, LayoutGrid, type LucideIcon, ShoppingBag } from "lucide-react-native";
+import { Home, LayoutGrid, type LucideIcon, Package, ShoppingBag } from "lucide-react-native";
 import { memo } from "react";
 import { View } from "react-native";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
@@ -12,7 +12,7 @@ const TABS: Record<string, { label: string; icon: LucideIcon }> = {
   home: { label: "Home", icon: Home },
   catalogue: { label: "Catalogue", icon: LayoutGrid },
   list: { label: "List", icon: ShoppingBag },
-  enquiries: { label: "Enquiries", icon: ClipboardList },
+  orders: { label: "Orders", icon: Package },
 };
 
 const LAYOUT = LinearTransition.springify().damping(20).stiffness(220);

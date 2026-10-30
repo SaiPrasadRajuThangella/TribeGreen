@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { Check, MessageCircle } from "lucide-react-native";
+import { Check, Clock, MessageCircle } from "lucide-react-native";
 import { useEffect } from "react";
 import { BackHandler, View } from "react-native";
 import Animated, {
@@ -11,14 +11,18 @@ import Animated, {
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { CustomisationTags } from "@/components/orders";
 import { Button, Text } from "@/components/ui";
-import { getBudgetBand, OCCASION_META } from "@/data/catalog";
+import { formatINR, OCCASION_META } from "@/data/catalog";
+import { REPLY_WITHIN_HOURS } from "@/lib/config";
+import { describeVariants, enquiryEstimate } from "@/lib/items";
+import { formatTime } from "@/lib/time";
 import { openWhatsApp } from "@/lib/whatsapp";
-import { useMyEnquiries } from "@/store";
+import { useMyOrders } from "@/store";
 
 export default function ThankYou() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const enquiry = useMyEnquiries((s) => s.enquiries.find((e) => e.id === id));
+  const enquiry = useMyOrders((s) => s.enquiries?.find((e) => e.id === id));
 
   const scale = useSharedValue(0);
   const ring = useSharedValue(0.6);
@@ -61,11 +65,20 @@ export default function ThankYou() {
             <Text weight="extrabold" className="mb-2 text-center text-[28px]">
               Enquiry sent!
             </Text>
-            <Text tone="muted" className="mb-8 text-center text-[15px] leading-6">
+            <Text tone="muted" className="text-center text-[15px] leading-6">
               Thank you{enquiry ? `, ${enquiry.name.split(" ")[0]}` : ""}. Our gifting team will call you
               {"\n"}
-              with a tailored quote within 48 hours.
+              with a tailored quote within {REPLY_WITHIN_HOURS} hours.
             </Text>
+            {enquiry ? (
+              <View className="mt-4 flex-row items-center gap-2 rounded-full bg-lime-soft px-4 py-2">
+                <Clock size={15} color="#3A5512" />
+                <Text weight="semibold" tone="limeInk" className="text-[13px]">
+                  Expect a call by {formatTime(enquiry.respondBy)}
+                </Text>
+              </View>
+            ) : null}
+            <View className="mb-6" />
           </Animated.View>
 
           {enquiry ? (
@@ -81,10 +94,30 @@ export default function ThankYou() {
                   {enquiry.id}
                 </Text>
               </View>
-              <SummaryRow label="Gifts" value={enquiry.products.map((p) => p.name).join(", ")} />
-              <SummaryRow label="Units" value={enquiry.units.toLocaleString("en-IN")} />
+              <View className="border-t border-line py-2.5">
+                {enquiry.products.map((p) => (
+                  <View key={p.id} className="flex-row justify-between gap-4 py-1">
+                    <View className="flex-1">
+                      <Text weight="semibold" className="text-[13px]">
+                        {p.name}
+                      </Text>
+                      {p.variants?.length ? (
+                        <Text tone="muted" className="text-[11px]">
+                          {describeVariants(p.variants)}
+                        </Text>
+                      ) : null}
+                      <CustomisationTags item={p} />
+                    </View>
+                    <Text weight="semibold" className="text-[13px]">
+                      {p.units} units
+                    </Text>
+                  </View>
+                ))}
+              </View>
               <SummaryRow label="Occasion" value={OCCASION_META[enquiry.occasion].short} />
-              <SummaryRow label="Budget" value={`${getBudgetBand(enquiry.budget)?.label} / unit`} />
+              {enquiryEstimate(enquiry.products) ? (
+                <SummaryRow label="Estimated total" value={formatINR(enquiryEstimate(enquiry.products))} />
+              ) : null}
             </Animated.View>
           ) : null}
         </View>
@@ -100,10 +133,10 @@ export default function ThankYou() {
           />
           <Button label="Back to home" variant="dark" onPress={() => router.replace("/home")} />
           <Button
-            label="View my enquiries"
+            label="Track in My orders"
             variant="ghost"
             size="md"
-            onPress={() => router.replace("/enquiries")}
+            onPress={() => router.replace("/orders")}
           />
         </Animated.View>
       </View>

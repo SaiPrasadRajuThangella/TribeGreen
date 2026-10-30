@@ -11,7 +11,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="home" />
       <Tabs.Screen name="catalogue" />
       <Tabs.Screen name="list" />
-      <Tabs.Screen name="enquiries" />
+      <Tabs.Screen name="orders" />
     </Tabs>
   );
 }

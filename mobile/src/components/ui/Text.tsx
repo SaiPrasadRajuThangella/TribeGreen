@@ -19,6 +19,7 @@ const TONES = {
   lime: "text-lime",
   limeInk: "text-lime-ink",
   danger: "text-danger",
+  blue: "text-[#1F4A73]",
 } as const;
 
 export type TextProps = RNTextProps & {

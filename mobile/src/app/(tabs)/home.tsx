@@ -18,11 +18,11 @@ import { SearchBar } from "@/components/SearchBar";
 import { SectionHeader } from "@/components/SectionHeader";
 import { TAB_BAR_SPACE } from "@/components/TabBar";
 import { IconButton, PressableScale, Text } from "@/components/ui";
-import { CATEGORY_META, OCCASION_META } from "@/data/catalog";
-import { BANNER_IMAGES } from "@/data/products";
+import { BANNER_IMAGES, CATEGORY_META, OCCASION_META } from "@/data/catalog";
 import { useListToggle } from "@/hooks/useListToggle";
 import { useProducts } from "@/hooks/useProducts";
 import { openWhatsApp } from "@/lib/whatsapp";
+import { isSignedIn, useCustomer } from "@/store";
 import { CATEGORIES, type Occasion, OCCASIONS } from "@/types";
 
 type Banner = {
@@ -100,11 +100,14 @@ export default function Home() {
               </Text>
             </View>
           </View>
-          <IconButton
-            icon={MessageCircle}
-            label="Chat with us on WhatsApp"
-            onPress={() => openWhatsApp("Hi Tribe Green! I'd like help choosing corporate gifts.")}
-          />
+          <View className="flex-row items-center gap-2">
+            <IconButton
+              icon={MessageCircle}
+              label="Chat with us on WhatsApp"
+              onPress={() => openWhatsApp("Hi Tribe Green! I'd like help choosing corporate gifts.")}
+            />
+            <AccountButton />
+          </View>
         </View>
 
         <Animated.View entering={FadeInDown.duration(500)} className="px-5 pb-5">
@@ -309,3 +312,40 @@ const Dot = memo(function Dot({ index, progress }: { index: number; progress: Sh
   });
   return <Animated.View style={style} className="h-1.5 rounded-full bg-ink" />;
 });
+
+// The customer's initials (opens My orders), or Sign in
+function AccountButton() {
+  const user = useCustomer((s) => s.user);
+  const signedIn = useCustomer(isSignedIn);
+  if (!signedIn || !user) {
+    return (
+      <PressableScale
+        haptic
+        onPress={() => router.push({ pathname: "/login", params: { next: "/home" } })}
+        className="h-11 items-center justify-center rounded-full bg-ink px-4"
+      >
+        <Text weight="semibold" tone="white" className="text-[13px]">
+          Sign in
+        </Text>
+      </PressableScale>
+    );
+  }
+  const initials = user.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("");
+  return (
+    <PressableScale
+      haptic
+      onPress={() => router.navigate("/orders")}
+      accessibilityLabel={`My orders, signed in as ${user.name}`}
+      className="h-11 w-11 items-center justify-center rounded-full bg-ink"
+    >
+      <Text weight="bold" tone="lime" className="text-[14px]">
+        {initials}
+      </Text>
+    </PressableScale>
+  );
+}

@@ -16,6 +16,7 @@ import { getBudgetBand, OCCASION_META } from "@/data/catalog";
 import { useListToggle } from "@/hooks/useListToggle";
 import { useProducts } from "@/hooks/useProducts";
 import { activeFilterCount, filterProducts } from "@/lib/filter";
+import { toggleIn } from "@/lib/items";
 import { type BudgetBandId, CATEGORIES, type Category, type Occasion, type Product } from "@/types";
 
 type Params = {
@@ -32,23 +33,30 @@ export default function Catalogue() {
   const { inList, toggle, openProduct } = useListToggle();
 
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  // Home screen links arrive as params: apply them each time they change (React's
+  // "adjust state when a prop changes" pattern, without an extra effect pass)
+  const linkKey = [params.category, params.occasion, params.budget, params.filters].join("|");
+  const [appliedLink, setAppliedLink] = useState("");
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const searchRef = useRef<TextInputInstance>(null);
   const deferredQuery = useDeferredValue(query);
 
-  // Home screen links arrive as params: apply them each time they change
-  useEffect(() => {
+  if (linkKey !== appliedLink) {
+    setAppliedLink(linkKey);
     if (params.category || params.occasion || params.budget) {
       setFilters({
-        category: params.category ?? null,
+        categories: params.category ? [params.category] : [],
         occasion: params.occasion ?? null,
         budget: params.budget ?? null,
       });
     }
-    if (params.focus) setTimeout(() => searchRef.current?.focus(), 350);
     if (params.filters) setSheetOpen(true);
-  }, [params.category, params.occasion, params.budget, params.focus, params.filters]);
+  }
+
+  useEffect(() => {
+    if (params.focus) setTimeout(() => searchRef.current?.focus(), 350);
+  }, [params.focus]);
 
   const results = useMemo(
     () => filterProducts(products, filters, deferredQuery),
@@ -59,8 +67,9 @@ export default function Catalogue() {
     [products, deferredQuery],
   );
 
+  // Categories combine like on the website: one, several, or All
   const setCategory = useCallback(
-    (c: Category | null) => setFilters((f) => ({ ...f, category: f.category === c ? null : c })),
+    (c: Category | null) => setFilters((f) => ({ ...f, categories: c ? toggleIn(f.categories, c) : [] })),
     [],
   );
   const applyFilters = useCallback((f: Filters) => {
@@ -116,9 +125,14 @@ export default function Catalogue() {
             paddingBottom: activePills.length ? 8 : 14,
           }}
         >
-          <Chip label="All" selected={!filters.category} onPress={() => setCategory(null)} />
+          <Chip label="All" selected={!filters.categories.length} onPress={() => setCategory(null)} />
           {CATEGORIES.map((c) => (
-            <Chip key={c} label={c} selected={filters.category === c} onPress={() => setCategory(c)} />
+            <Chip
+              key={c}
+              label={c}
+              selected={filters.categories.includes(c)}
+              onPress={() => setCategory(c)}
+            />
           ))}
         </ScrollView>
 

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProductImage } from "@/components/ProductImage";
 import { Button, Text } from "@/components/ui";
-import { BANNER_IMAGES } from "@/data/products";
+import { BANNER_IMAGES } from "@/data/catalog";
 import { usePrefs } from "@/store";
 
 export default function Onboarding() {
@@ -16,6 +16,12 @@ export default function Onboarding() {
   const start = () => {
     finish();
     router.replace("/home");
+  };
+
+  // Signing up at the start; browsing first is fine too, sign-in is asked for when sending
+  const signUp = () => {
+    finish();
+    router.replace({ pathname: "/login", params: { next: "/home" } });
   };
 
   return (
@@ -52,7 +58,14 @@ export default function Onboarding() {
           Welcome kits, festive hampers and branded merchandise — customised with your logo and delivered
           across India.
         </Text>
-        <Button label="Get started" variant="dark" icon={ArrowRight} iconPosition="right" onPress={start} />
+        <Button
+          label="Sign in or create an account"
+          variant="dark"
+          icon={ArrowRight}
+          iconPosition="right"
+          onPress={signUp}
+        />
+        <Button label="Browse first" variant="ghost" size="md" className="mt-3" onPress={start} />
       </Animated.View>
     </View>
   );

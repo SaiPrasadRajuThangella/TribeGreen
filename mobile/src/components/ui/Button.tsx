@@ -10,6 +10,7 @@ const VARIANTS = {
   dark: { box: "bg-ink", tone: "white", icon: "#FFFFFF" },
   outline: { box: "bg-card border border-line", tone: "ink", icon: "#121212" },
   ghost: { box: "bg-soft", tone: "ink", icon: "#121212" },
+  danger: { box: "bg-danger", tone: "white", icon: "#FFFFFF" },
 } as const;
 
 type Props = Omit<PressableScaleProps, "children"> & {

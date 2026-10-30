@@ -16,7 +16,9 @@ import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { usePrefs } from "@/store";
+import { RemoveGiftDialog } from "@/components/GiftRow";
+import { ItemSheet } from "@/components/ItemSheet";
+import { useCustomer, usePrefs } from "@/store";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -28,7 +30,10 @@ export default function RootLayout() {
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
   });
-  const hydrated = usePrefs((s) => s.hydrated);
+  // Wait for saved preferences and the saved sign-in, so screens start in the right state
+  const prefsReady = usePrefs((s) => s.hydrated);
+  const customerReady = useCustomer((s) => s.hydrated);
+  const hydrated = prefsReady && customerReady;
   const ready = (fontsLoaded || !!fontError) && hydrated;
 
   useEffect(() => {
@@ -51,7 +56,11 @@ export default function RootLayout() {
           <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
           <Stack.Screen name="enquiry" options={{ animation: "slide_from_bottom" }} />
           <Stack.Screen name="thank-you" options={{ animation: "fade", gestureEnabled: false }} />
+          <Stack.Screen name="login" options={{ animation: "slide_from_bottom" }} />
         </Stack>
+        {/* Shared by every screen: the size / customisation picker and "Remove this gift?" */}
+        <ItemSheet />
+        <RemoveGiftDialog />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

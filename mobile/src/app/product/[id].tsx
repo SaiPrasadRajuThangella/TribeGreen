@@ -7,12 +7,10 @@ import {
   type LucideIcon,
   MessageCircle,
   Package,
-  PenTool,
+  Ruler,
   Send,
   Share2,
   ShoppingBag,
-  Stamp,
-  Type,
 } from "lucide-react-native";
 import { memo, useMemo, useState } from "react";
 import { ScrollView, Share, useWindowDimensions, View } from "react-native";
@@ -26,36 +24,41 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CustomisationPicker } from "@/components/CustomisationPicker";
 import { EmptyState } from "@/components/EmptyState";
 import { ProductCard } from "@/components/ProductCard";
 import { ProductImage } from "@/components/ProductImage";
+import { QuantityEditor } from "@/components/QuantityEditor";
 import { Button, IconButton, PressableScale, Text } from "@/components/ui";
-import { formatPriceRange, OCCASION_META } from "@/data/catalog";
+import { formatINR, formatPriceRange, OCCASION_META } from "@/data/catalog";
 import { useListToggle } from "@/hooks/useListToggle";
 import { useProducts } from "@/hooks/useProducts";
 import { success } from "@/lib/haptics";
+import {
+  type Choice,
+  cleanCustomisations,
+  defaultQuantity,
+  lineTotal,
+  priceFor,
+  quantityProblem,
+} from "@/lib/items";
 import { openWhatsApp, productWhatsAppMessage } from "@/lib/whatsapp";
 import { useEnquiryList } from "@/store";
-import { type Customisation, CUSTOMISATIONS } from "@/types";
-
-const CUSTOM_ICONS: Record<Customisation, LucideIcon> = {
-  "Logo printing": Stamp,
-  "Laser engraving": PenTool,
-  "Name personalisation": Type,
-};
 
 export default function ProductDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { products, byId } = useProducts();
+  const { products, byId, loading } = useProducts();
   const product = byId.get(id);
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const heroHeight = Math.round(height * 0.5);
 
-  const inList = useEnquiryList((s) => s.items.some((i) => i.productId === id));
-  const addToList = useEnquiryList((s) => s.add);
+  const listed = useEnquiryList((s) => s.items.find((i) => i.productId === id));
+  const put = useEnquiryList((s) => s.put);
   const { inList: listSet, toggle, openProduct } = useListToggle();
   const [expanded, setExpanded] = useState(false);
+  const [edited, setEdited] = useState<Choice | null>(null);
+  const [tried, setTried] = useState(false);
 
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler((e) => {
@@ -84,30 +87,53 @@ export default function ProductDetail() {
   if (!product) {
     return (
       <View className="flex-1 bg-canvas" style={{ paddingTop: insets.top }}>
-        <EmptyState
-          icon={Package}
-          title="Gift not found"
-          body="This product may have been removed."
-          actionLabel="Back to catalogue"
-          onAction={() => router.back()}
-        />
+        {loading ? null : (
+          <EmptyState
+            icon={Package}
+            title="Gift not found"
+            body="This product may have been removed."
+            actionLabel="Back to catalogue"
+            onAction={() => router.back()}
+          />
+        )}
       </View>
     );
   }
+
+  // What the user is editing, else what is already in their list, else a fresh start
+  const choice: Choice = edited ?? listed ?? defaultQuantity(product);
+  const problem = quantityProblem(product, choice);
+  const inList = !!listed;
+  const dirty = edited !== null;
+  const optionName = product.option?.name.toLowerCase();
 
   const share = () =>
     Share.share({
       message: `${product.name} (${formatPriceRange(product)} per unit) from Tribe Green corporate gifting.`,
     });
 
-  const handleAdd = () => {
-    if (inList) {
-      router.navigate("/list");
-      return;
+  // Saves the choice to the list; false when it still needs sizes or more units
+  const commit = () => {
+    if (inList && !dirty) return true;
+    if (problem) {
+      setTried(true);
+      return false;
     }
     success();
-    addToList(product.id, product.minOrder);
+    put(product.id, {
+      units: choice.units,
+      variants: choice.variants,
+      customisations: cleanCustomisations(product, choice.customisations),
+    });
+    setEdited(null);
+    return true;
   };
+
+  const handleAdd = () => {
+    if (inList && !dirty) router.navigate("/list");
+    else commit();
+  };
+  const enquireNow = () => commit() && router.push("/enquiry");
 
   return (
     <View className="flex-1 bg-canvas">
@@ -137,22 +163,24 @@ export default function ProductDetail() {
             ) : null}
           </View>
 
-          <View className="flex-row items-start justify-between gap-4">
-            <Text weight="extrabold" className="flex-1 text-[24px] leading-[30px]">
-              {product.name}
-            </Text>
-            <View className="items-end">
-              <Text weight="extrabold" className="text-[20px]">
-                ₹{product.priceMin.toLocaleString("en-IN")}
-              </Text>
-              <Text tone="muted" className="text-[11px]">
-                up to ₹{product.priceMax.toLocaleString("en-IN")} / unit
-              </Text>
-            </View>
-          </View>
+          <Text weight="extrabold" className="text-[24px] leading-[30px]">
+            {product.name}
+          </Text>
           <Text tone="muted" className="mt-1.5 text-[14px]">
             {product.shortDescription}
           </Text>
+          <View className="mt-3">
+            <Text weight="extrabold" className="text-[22px]">
+              {formatPriceRange(product)}
+              <Text tone="muted" className="text-[13px]">
+                {" "}
+                / unit
+              </Text>
+            </Text>
+            <Text tone="muted" className="text-[12px]">
+              {formatINR(product.priceMin)} plain · {formatINR(product.priceMax)} with every customisation
+            </Text>
+          </View>
 
           {/* Quick actions */}
           <View className="mt-5 flex-row rounded-[24px] bg-card p-2">
@@ -170,17 +198,77 @@ export default function ProductDetail() {
                 router.navigate({ pathname: "/catalogue", params: { category: product.category } })
               }
             />
-            <QuickAction
-              icon={Send}
-              label="Enquire"
-              onPress={() => router.push({ pathname: "/enquiry", params: { productId: product.id } })}
-            />
+            <QuickAction icon={Send} label="Enquire" onPress={enquireNow} />
           </View>
 
           {/* Key details */}
           <View className="mt-4 flex-row gap-3">
             <Detail icon={Package} label="Min. order" value={`${product.minOrder} units`} />
-            <Detail icon={Clock} label="Lead time" value="7–10 days" />
+            {product.option ? (
+              <Detail
+                icon={Ruler}
+                label={`${product.option.name}s`}
+                value={
+                  product.option.name === "Size"
+                    ? `${product.option.values[0]} – ${product.option.values.at(-1)}`
+                    : `${product.option.values.length} colours`
+                }
+              />
+            ) : (
+              <Detail icon={Clock} label="Lead time" value="7–10 days" />
+            )}
+          </View>
+
+          {/* Quantity and customisation for this gift */}
+          <View className="mt-4 rounded-[28px] bg-card p-4">
+            <View className="mb-3 flex-row items-baseline justify-between">
+              <Text weight="bold" className="text-[15px]">
+                {product.option ? `Quantity by ${optionName}` : "Quantity"}
+              </Text>
+              {product.option ? (
+                <Text tone="muted" className="text-[11px]">
+                  Mix freely · {product.minOrder} min in total
+                </Text>
+              ) : null}
+            </View>
+            <QuantityEditor
+              product={product}
+              value={choice}
+              onChange={(q) => setEdited({ ...choice, ...q })}
+            />
+
+            <Text weight="bold" className="mb-3 mt-5 text-[15px]">
+              Customise this gift <Text tone="muted">(optional)</Text>
+            </Text>
+            <CustomisationPicker
+              product={product}
+              value={choice.customisations}
+              onChange={(customisations) => setEdited({ ...choice, customisations })}
+            />
+
+            <View className="mt-4 rounded-2xl bg-canvas px-4 py-3">
+              <Text tone="muted" className="text-[13px]">
+                Your price{" "}
+                <Text weight="bold" className="text-[13px]">
+                  {formatINR(priceFor(product, choice))} / unit
+                </Text>
+                {choice.units ? (
+                  <Text tone="muted" className="text-[13px]">
+                    {" "}
+                    ·{" "}
+                    <Text weight="bold" className="text-[13px]">
+                      {formatINR(lineTotal(product, choice))}
+                    </Text>{" "}
+                    for {choice.units.toLocaleString("en-IN")} units
+                  </Text>
+                ) : null}
+              </Text>
+            </View>
+            {problem && (tried || choice.units > 0) ? (
+              <Text tone="danger" weight="medium" className="mt-2 text-[13px]">
+                {problem}
+              </Text>
+            ) : null}
           </View>
 
           {/* Description */}
@@ -207,33 +295,6 @@ export default function ProductDetail() {
                     <Icon size={14} color="#2B2B2B" strokeWidth={2} />
                     <Text weight="medium" className="text-[12px]">
                       {short}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </Section>
-
-          <Section title="Make it yours">
-            <View className="overflow-hidden rounded-[22px] bg-card">
-              {CUSTOMISATIONS.map((c, i) => {
-                const Icon = CUSTOM_ICONS[c];
-                const available = product.customisations.includes(c);
-                return (
-                  <View
-                    key={c}
-                    className={`flex-row items-center gap-3 px-4 py-3.5 ${i > 0 ? "border-t border-line" : ""}`}
-                  >
-                    <View
-                      className={`h-9 w-9 items-center justify-center rounded-full ${available ? "bg-lime-soft" : "bg-soft"}`}
-                    >
-                      <Icon size={16} color={available ? "#3A5512" : "#A3A69D"} strokeWidth={2} />
-                    </View>
-                    <Text weight="medium" tone={available ? "ink" : "faint"} className="flex-1 text-[14px]">
-                      {c}
-                    </Text>
-                    <Text weight="medium" tone={available ? "limeInk" : "faint"} className="text-[12px]">
-                      {available ? "Available" : "Not offered"}
                     </Text>
                   </View>
                 );
@@ -286,11 +347,15 @@ export default function ProductDetail() {
           iconColor="#25D366"
           onPress={() => openWhatsApp(productWhatsAppMessage(product.name))}
         />
-        <Animated.View key={inList ? "in" : "out"} entering={FadeIn.duration(200)} className="flex-1">
+        <Animated.View
+          key={inList ? (dirty ? "dirty" : "in") : "out"}
+          entering={FadeIn.duration(200)}
+          className="flex-1"
+        >
           <Button
-            label={inList ? "In your list · View" : "Add to enquiry list"}
-            icon={inList ? Check : ShoppingBag}
-            variant={inList ? "dark" : "primary"}
+            label={inList ? (dirty ? "Update list" : "In your list · View") : "Add to enquiry list"}
+            icon={inList && !dirty ? Check : ShoppingBag}
+            variant={inList && !dirty ? "dark" : "primary"}
             onPress={handleAdd}
           />
         </Animated.View>
