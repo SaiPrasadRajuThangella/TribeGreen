@@ -37,14 +37,14 @@ The website forwards `/api` to the backend. The app finds the backend on the sam
 
 | Command (root) | What it does |
 |---|---|
-| `npm run dev` | API + website + app |
+| `npm run dev` | API + website + app. The app's QR code and shortcuts (`a` = Android, `r` = reload) show at the bottom; API and website lines are tagged `[api]` / `[web]`. Ctrl+C stops all three |
 | `npm run dev:site` | API + website only |
 | `npm run dev:backend` / `dev:web` / `dev:mobile` | One part on its own |
 | `npm test` | Backend API tests |
 | `npm run build` | Build the backend and the website |
 | `npm run check` | Type-check and lint all three |
 
-**On a phone:** run the API first (`npm run dev:site`), then `npm run dev:mobile` in a second terminal and scan its QR code with Expo Go. The phone must be on the same Wi-Fi as the computer. The QR code only shows when the app runs in its own terminal, not inside `npm run dev`.
+**On a phone:** scan the QR code from `npm run dev` with Expo Go. The phone must be on the same Wi-Fi as the computer. If you're on Node 20, `npm run dev` warns you: run `nvm use 22.17.0` first, because the app needs Node 22.
 
 Each folder on its own works too, e.g. `cd backend && npm install && npm run dev`.
 
