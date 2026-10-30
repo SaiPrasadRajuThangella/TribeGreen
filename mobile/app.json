@@ -34,7 +34,8 @@
         }
       ],
       "expo-image",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "./plugins/withReleaseBuild"
     ],
     "scheme": "tribegreen",
     "backgroundColor": "#EEF0EA",
