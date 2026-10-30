@@ -1,18 +1,18 @@
-export const CATEGORIES = ["Drinkware", "Apparel", "Work Essentials", "Wellness"] as const;
-export type Category = (typeof CATEGORIES)[number];
+// Category, occasion, customisation, status and order-stage names come from the API (GET /api/lists)
+export type Category = string;
+export type Occasion = string;
+export type Customisation = string;
+export type EnquiryStatus = string;
+export type OrderStage = string;
 
-export const OCCASIONS = [
-  "Employee Onboarding",
-  "Corporate Diwali Gifting",
-  "New Year Gifts",
-  "Client and Vendor Gifting",
-  "Events and Trade Shows",
-  "Employee Recognition",
-] as const;
-export type Occasion = (typeof OCCASIONS)[number];
-
-export const CUSTOMISATIONS = ["Logo printing", "Laser engraving", "Name personalisation"] as const;
-export type Customisation = (typeof CUSTOMISATIONS)[number];
+// Every name list, in display order
+export type Lists = {
+  categories: Category[];
+  occasions: Occasion[];
+  customisations: Customisation[];
+  statuses: EnquiryStatus[];
+  orderStages: OrderStage[];
+};
 
 export type BudgetBandId = "under-500" | "500-1500" | "1500-3000" | "above-3000";
 
@@ -61,7 +61,13 @@ export type EnquiryItem = {
   listPrice?: number; // catalogue price per unit with this customisation, set by the server
 };
 
-export type EnquiryStatus = "New" | "Contacted" | "Converted" | "Lost";
+// Where the gifts are delivered
+export type Address = {
+  line: string; // building, street, area
+  city: string;
+  state: string;
+  pincode: string; // 6 digits
+};
 
 export type EnquiryInput = {
   name: string;
@@ -71,13 +77,11 @@ export type EnquiryInput = {
   occasion: Occasion;
   units: number;
   deliveryDate: string; // ISO date (yyyy-mm-dd)
+  address: Address;
   products: EnquiryItem[];
   customisations: Customisation[]; // everything asked for across the gifts
   message: string;
 };
-
-export const ORDER_STAGES = ["Confirmed", "In production", "Dispatched", "Delivered"] as const;
-export type OrderStage = (typeof ORDER_STAGES)[number];
 
 export type OrderItem = EnquiryItem & { unitPrice: number };
 
@@ -95,14 +99,16 @@ export type Order = {
 };
 
 // Orders move one stage at a time, forwards or back
-export const nextStage = (stage: OrderStage, step: 1 | -1) =>
-  ORDER_STAGES[ORDER_STAGES.indexOf(stage) + step] as OrderStage | undefined;
+export const nextStage = (stages: OrderStage[], stage: OrderStage, step: 1 | -1): OrderStage | undefined =>
+  stages[stages.indexOf(stage) + step];
 
 // What the admin fills in to finalise an order, and what can change afterwards
 export type OrderDraft = Pick<Order, "items" | "expectedDelivery" | "note">;
 export type OrderChanges = Partial<Pick<Order, "stage" | "expectedDelivery" | "note">>;
 
-export type Enquiry = EnquiryInput & {
+// Enquiries sent before the address was asked for don't have one
+export type Enquiry = Omit<EnquiryInput, "address"> & {
+  address?: Address;
   id: string;
   source: "app" | "website";
   status: EnquiryStatus;

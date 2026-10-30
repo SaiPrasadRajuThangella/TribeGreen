@@ -19,7 +19,7 @@ import { LoadError } from "@/components/LoadError";
 import { ProductCard } from "@/components/ProductCard";
 import { QuantityEditor } from "@/components/QuantityEditor";
 import { Button } from "@/components/ui";
-import { formatINR, formatPriceRange, OCCASION_META } from "@/data/catalog";
+import { formatINR, formatPriceRange, occasionMeta } from "@/data/catalog";
 import { useListToggle } from "@/hooks/useListToggle";
 import { useProducts } from "@/hooks/useProducts";
 import { shareImageFor, useSeo } from "@/hooks/useSeo";
@@ -308,7 +308,7 @@ function ProductDetail({ product }: { product: Product }) {
             <Section title="Perfect for">
               <div className="flex flex-wrap gap-2">
                 {product.occasions.map((o) => {
-                  const { icon: Icon, short } = OCCASION_META[o];
+                  const { icon: Icon, short } = occasionMeta(o);
                   return (
                     <Link
                       key={o}

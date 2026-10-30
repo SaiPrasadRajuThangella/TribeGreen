@@ -5,31 +5,44 @@ import { useSearchParams } from "react-router";
 
 import { LoadError } from "@/components/LoadError";
 import { ProductCard, ProductCardSkeleton } from "@/components/ProductCard";
-import { Button, Chip } from "@/components/ui";
-import { BUDGET_BANDS, getBudgetBand, OCCASION_META } from "@/data/catalog";
+import { Button, Chip, ChipSkeletons } from "@/components/ui";
+import { BUDGET_BANDS, getBudgetBand, occasionMeta } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { useListToggle } from "@/hooks/useListToggle";
 import { useProducts } from "@/hooks/useProducts";
 import { useSeo } from "@/hooks/useSeo";
 import { activeFilterCount, type Filters, filterProducts, joinCategories } from "@/lib/filter";
-import { type BudgetBandId, CATEGORIES, type Category, type Occasion, OCCASIONS } from "@/types";
+import type { BudgetBandId, Category } from "@/types";
 
 type Sort = "featured" | "price-asc" | "price-desc";
 
-const isOccasion = (v: string | null): v is Occasion => OCCASIONS.includes(v as Occasion);
 const isBudget = (v: string | null): v is BudgetBandId => BUDGET_BANDS.some((b) => b.id === v);
 
 export default function Catalogue() {
   const [params, setParams] = useSearchParams();
-  const { products, loading, error, retry } = useProducts();
+  const { products, loading: productsLoading, error: productsError, retry: retryProducts } = useProducts();
+  const { lists, loading: listsLoading, error: listsError, retry: retryLists } = useLists();
+  const loading = productsLoading || listsLoading;
+  const error = productsError ?? listsError;
+  const retry = () => {
+    if (productsError) retryProducts();
+    if (listsError) retryLists();
+  };
   const { inList, toggle } = useListToggle();
   const [sheetOpen, setSheetOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // The URL is the source of truth, so filtered views can be shared and bookmarked
+  // The URL is the source of truth, so filtered views can be shared and bookmarked.
+  // Names are checked against the API's lists once they arrive.
+  const pickedCategories = params.getAll("category");
+  const occasionParam = params.get("occasion");
   const filters: Filters = {
     // ?category=Drinkware&category=Apparel, kept in catalogue order
-    categories: CATEGORIES.filter((c) => params.getAll("category").includes(c)),
-    occasion: isOccasion(params.get("occasion")) ? (params.get("occasion") as Occasion) : null,
+    categories: listsLoading
+      ? pickedCategories
+      : lists.categories.filter((c) => pickedCategories.includes(c)),
+    occasion:
+      occasionParam && (listsLoading || lists.occasions.includes(occasionParam)) ? occasionParam : null,
     budget: isBudget(params.get("budget")) ? (params.get("budget") as BudgetBandId) : null,
   };
   const query = params.get("q") ?? "";
@@ -84,7 +97,7 @@ export default function Catalogue() {
 
   const categoryLabel = joinCategories(filters.categories);
   const heading = filters.occasion
-    ? `${OCCASION_META[filters.occasion].short} gifts`
+    ? `${occasionMeta(filters.occasion).short} gifts`
     : categoryLabel || "All corporate gifts";
 
   useSeo({
@@ -101,21 +114,23 @@ export default function Catalogue() {
         <Chip selected={!filters.categories.length} onClick={() => update({ category: null })}>
           All
         </Chip>
-        {CATEGORIES.map((c) => (
+        {listsLoading ? <ChipSkeletons count={4} /> : null}
+        {lists.categories.map((c) => (
           <Chip key={c} selected={filters.categories.includes(c)} onClick={() => toggleCategory(c)}>
             {c}
           </Chip>
         ))}
       </FilterGroup>
       <FilterGroup title="Occasion">
-        {OCCASIONS.map((o) => (
+        {listsLoading ? <ChipSkeletons count={6} /> : null}
+        {lists.occasions.map((o) => (
           <Chip
             key={o}
-            icon={OCCASION_META[o].icon}
+            icon={occasionMeta(o).icon}
             selected={filters.occasion === o}
             onClick={() => toggleFilter("occasion", o)}
           >
-            {OCCASION_META[o].short}
+            {occasionMeta(o).short}
           </Chip>
         ))}
       </FilterGroup>
@@ -194,7 +209,8 @@ export default function Catalogue() {
               <Chip selected={!filters.categories.length} onClick={() => update({ category: null })}>
                 All
               </Chip>
-              {CATEGORIES.map((c) => (
+              {listsLoading ? <ChipSkeletons count={4} /> : null}
+              {lists.categories.map((c) => (
                 <Chip key={c} selected={filters.categories.includes(c)} onClick={() => toggleCategory(c)}>
                   {c}
                 </Chip>
@@ -203,7 +219,7 @@ export default function Catalogue() {
             <div className="flex flex-wrap gap-2">
               {filters.occasion ? (
                 <ActivePill
-                  label={OCCASION_META[filters.occasion].short}
+                  label={occasionMeta(filters.occasion).short}
                   onRemove={() => update({ occasion: null })}
                 />
               ) : null}

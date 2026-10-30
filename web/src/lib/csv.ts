@@ -24,6 +24,11 @@ const COLUMNS: [string, (e: Enquiry) => string | number][] = [
   ["Estimated total", (e) => enquiryEstimate(e.products) || ""],
   ["Budget per unit", (e) => getBudgetBand(e.budget)?.label ?? e.budget],
   ["Delivery date", (e) => e.deliveryDate],
+  // Older enquiries have no address
+  ["Delivery address", (e) => e.address?.line ?? ""],
+  ["City", (e) => e.address?.city ?? ""],
+  ["State", (e) => e.address?.state ?? ""],
+  ["PIN code", (e) => e.address?.pincode ?? ""],
   ["Products", (e) => e.products.map(giftCell).join("; ")],
   ["Customisation", (e) => e.customisations.join("; ")],
   ["Message", (e) => e.message],

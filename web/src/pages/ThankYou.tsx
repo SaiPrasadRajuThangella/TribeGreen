@@ -4,7 +4,8 @@ import { Link, useLocation, useParams } from "react-router";
 
 import { CustomisationTags } from "@/components/orders";
 import { ButtonLink } from "@/components/ui";
-import { formatINR, OCCASION_META } from "@/data/catalog";
+import { WhatsAppNotice } from "@/components/WhatsAppNotice";
+import { formatINR, occasionMeta } from "@/data/catalog";
 import { useSeo } from "@/hooks/useSeo";
 import { REPLY_WITHIN_HOURS } from "@/lib/config";
 import { describeVariants, enquiryEstimate } from "@/lib/items";
@@ -49,12 +50,12 @@ export default function ThankYou() {
       >
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Enquiry sent!</h1>
         <p className="mt-3 text-muted">
-          Thank you{enquiry ? `, ${enquiry.name.split(" ")[0]}` : ""}. Our gifting team will call you with a
-          tailored quote within {REPLY_WITHIN_HOURS} hours.
+          Thank you{enquiry ? `, ${enquiry.name.split(" ")[0]}` : ""}. Our gifting team will message you on
+          WhatsApp with a tailored quote within {REPLY_WITHIN_HOURS} hours.
         </p>
         {enquiry ? (
           <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-lime-soft px-4 py-2 text-sm font-semibold text-lime-ink">
-            <Clock size={16} /> Expect a call by {formatTime(enquiry.respondBy)}
+            <Clock size={16} /> Expect to hear from us by {formatTime(enquiry.respondBy)}
           </p>
         ) : null}
       </motion.div>
@@ -85,7 +86,13 @@ export default function ThankYou() {
             </dd>
           </div>
           <Row label="Total units" value={enquiry.units.toLocaleString("en-IN")} />
-          <Row label="Occasion" value={OCCASION_META[enquiry.occasion].short} />
+          <Row label="Occasion" value={occasionMeta(enquiry.occasion).short} />
+          {enquiry.address ? (
+            <Row
+              label="Deliver to"
+              value={`${enquiry.address.line}, ${enquiry.address.city}, ${enquiry.address.state} ${enquiry.address.pincode}`}
+            />
+          ) : null}
           {enquiryEstimate(enquiry.products) ? (
             <Row label="Estimated total" value={formatINR(enquiryEstimate(enquiry.products))} />
           ) : null}
@@ -95,6 +102,15 @@ export default function ThankYou() {
           Reference <span className="font-bold text-ink">{id}</span>
         </p>
       ) : null}
+
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5, duration: 0.5 }}
+        className="mt-6 w-full max-w-md"
+      >
+        <WhatsAppNotice sent />
+      </motion.div>
 
       <div className="mt-8 flex flex-wrap justify-center gap-3">
         <ButtonLink to="/orders" variant="dark" icon={PackageSearch}>
@@ -122,8 +138,12 @@ export default function ThankYou() {
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="flex justify-between gap-6 border-t border-line py-3 first:border-t-0 first:pt-0">
-      <dt className="text-muted">{label}</dt>
-      <dd className={`text-right ${strong ? "font-bold tracking-wider" : "font-semibold"}`}>{value}</dd>
+      <dt className="shrink-0 text-muted">{label}</dt>
+      <dd
+        className={`min-w-0 text-right break-words ${strong ? "font-bold tracking-wider" : "font-semibold"}`}
+      >
+        {value}
+      </dd>
     </div>
   );
 }

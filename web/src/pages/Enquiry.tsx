@@ -1,33 +1,33 @@
-import { AlertCircle, Plus, Send, UserRound } from "lucide-react";
+import { AlertCircle, Plus, RefreshCw, Send, UserRound } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 import { GiftRow } from "@/components/GiftRow";
-import { Button, Chip } from "@/components/ui";
-import { formatINR, OCCASION_META } from "@/data/catalog";
+import { Button, Chip, ChipSkeletons } from "@/components/ui";
+import { WhatsAppNotice } from "@/components/WhatsAppNotice";
+import { formatINR, occasionMeta } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { useProducts } from "@/hooks/useProducts";
 import { useSeo } from "@/hooks/useSeo";
-import { createEnquiry } from "@/lib/api";
+import { ApiError, createEnquiry } from "@/lib/api";
 import { REPLY_WITHIN_HOURS } from "@/lib/config";
 import { allCustomisations, lineTotal, quantityProblem, toEnquiryItem } from "@/lib/items";
 import {
-  formatPhone,
+  type AddressField,
   type EnquiryFormErrors,
+  type EnquiryFormField,
   type EnquiryFormValues,
+  fieldKey,
+  formatPhone,
   validateEnquiry,
 } from "@/lib/validation";
-import {
-  type EnquiryDraft,
-  isSignedIn,
-  useCustomer,
-  useEnquiryDraft,
-  useEnquiryList,
-  useMyOrders,
-} from "@/store";
-import { OCCASIONS } from "@/types";
+import { type EnquiryDraft, useCustomer, useEnquiryDraft, useEnquiryList, useMyOrders } from "@/store";
+import type { Address } from "@/types";
 
 const tomorrow = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+const NO_ADDRESS: Address = { line: "", city: "", state: "", pincode: "" };
 
 export default function EnquiryPage() {
   useSeo({
@@ -45,8 +45,11 @@ export default function EnquiryPage() {
   const draft = useEnquiryDraft((s) => s.draft);
   const setField = useEnquiryDraft((s) => s.setField);
   const clearDraft = useEnquiryDraft((s) => s.clear);
+  // Only signed-in customers reach this page (the route requires an account)
   const customer = useCustomer((s) => s.user);
-  const signedIn = useCustomer(isSignedIn);
+  // The address on their latest enquiry, when My orders has loaded it
+  const lastAddress = useMyOrders((s) => s.enquiries?.find((e) => e.address)?.address);
+  const { lists, loading: listsLoading, error: listsError, retry: retryLists } = useLists();
 
   const [errors, setErrors] = useState<EnquiryFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -83,15 +86,31 @@ export default function EnquiryPage() {
     message: "",
     ...draft,
     occasion: draft.occasion as EnquiryFormValues["occasion"],
+    address: { ...NO_ADDRESS, ...(draft.address ?? lastAddress) },
     units: totals.units,
     products,
     // Chosen per gift; the enquiry also keeps the combined list (the app and CSV use it)
     customisations: allCustomisations(products),
   };
 
+  const clearError = (key: EnquiryFormField) => setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
+
   const set = <K extends keyof EnquiryDraft>(key: K, value: EnquiryDraft[K]) => {
     setField(key, value);
-    setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
+    clearError(key);
+  };
+
+  const setAddress = (field: AddressField, value: string) => {
+    setField("address", { ...form.address, [field]: value });
+    clearError(`address.${field}`);
+  };
+
+  // Move focus to the first field that needs attention
+  const showErrors = (found: EnquiryFormErrors) => {
+    setErrors(found);
+    const field = document.getElementById(`field-${Object.keys(found)[0]}`);
+    field?.focus();
+    field?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -102,19 +121,8 @@ export default function EnquiryPage() {
     if (gifts.some(({ item, product }) => quantityProblem(product, item))) {
       found.products = "Finish the quantities for the marked gifts";
     }
-    if (!data || found.products) {
-      setErrors(found);
-      // Move focus to the first field that needs attention
-      const first = Object.keys(found)[0];
-      document.getElementById(`field-${first}`)?.focus();
-      document.getElementById(`field-${first}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
-    }
-    // Enquiries belong to an account: sign in, then come back here (the form is saved)
-    if (!signedIn) {
-      navigate("/login?next=/enquiry");
-      return;
-    }
+    if (!data || found.products) return showErrors(found);
+
     setSubmitting(true);
     try {
       const enquiry = await createEnquiry(data);
@@ -124,7 +132,17 @@ export default function EnquiryPage() {
       clearDraft();
       navigate(`/thank-you/${enquiry.id}`, { state: { enquiry } });
     } catch (err) {
-      setServerError((err as Error).message);
+      // The server's field messages go next to the fields they are about
+      const fieldErrors = err instanceof ApiError ? err.errors : undefined;
+      if (fieldErrors && Object.keys(fieldErrors).length) {
+        const mapped: EnquiryFormErrors = {};
+        for (const [path, message] of Object.entries(fieldErrors)) {
+          mapped[fieldKey(path.split("."))] ??= message;
+        }
+        showErrors(mapped);
+      } else {
+        setServerError((err as Error).message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -137,9 +155,9 @@ export default function EnquiryPage() {
       <div className="mb-8 max-w-2xl">
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Request a quote</h1>
         <p className="mt-2 text-muted">
-          Tell us what you need. Our gifting team calls you back within {REPLY_WITHIN_HOURS} hours.
+          Tell us what you need. Our gifting team gets back to you within {REPLY_WITHIN_HOURS} hours.
         </p>
-        {signedIn && customer ? (
+        {customer ? (
           <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-card px-3.5 py-1.5 text-sm text-muted">
             <UserRound size={15} /> Signed in as{" "}
             <span className="font-semibold text-ink">{customer.name}</span> · {formatPhone(customer.phone)}
@@ -215,16 +233,28 @@ export default function EnquiryPage() {
           <Card title="Order details">
             <Field label="Occasion" name="occasion" error={errors.occasion} as="fieldset">
               <div id="field-occasion" tabIndex={-1} className="flex flex-wrap gap-2 outline-none">
-                {OCCASIONS.map((o) => (
-                  <Chip
-                    key={o}
-                    icon={OCCASION_META[o].icon}
-                    selected={form.occasion === o}
-                    onClick={() => set("occasion", o)}
+                {listsError ? (
+                  <button
+                    type="button"
+                    onClick={retryLists}
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-danger"
                   >
-                    {OCCASION_META[o].short}
-                  </Chip>
-                ))}
+                    <RefreshCw size={15} /> Couldn't load the occasions. Try again
+                  </button>
+                ) : listsLoading ? (
+                  <ChipSkeletons count={6} />
+                ) : (
+                  lists.occasions.map((o) => (
+                    <Chip
+                      key={o}
+                      icon={occasionMeta(o).icon}
+                      selected={form.occasion === o}
+                      onClick={() => set("occasion", o)}
+                    >
+                      {occasionMeta(o).short}
+                    </Chip>
+                  ))
+                )}
               </div>
             </Field>
 
@@ -265,6 +295,61 @@ export default function EnquiryPage() {
             </div>
             <p className="mt-3 text-xs text-faint">
               Logo printing, engraving and names are picked on each gift in your list.
+            </p>
+          </Card>
+
+          <Card title="Delivery address">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="sm:col-span-3">
+                <Field label="Address" name="address.line" error={errors["address.line"]}>
+                  <input
+                    id="field-address.line"
+                    autoComplete="street-address"
+                    maxLength={200}
+                    placeholder="Building, street and area"
+                    value={form.address.line}
+                    onChange={(e) => setAddress("line", e.target.value)}
+                    className={inputCls(errors["address.line"])}
+                  />
+                </Field>
+              </div>
+              <Field label="City" name="address.city" error={errors["address.city"]}>
+                <input
+                  id="field-address.city"
+                  autoComplete="address-level2"
+                  maxLength={60}
+                  placeholder="Hyderabad"
+                  value={form.address.city}
+                  onChange={(e) => setAddress("city", e.target.value)}
+                  className={inputCls(errors["address.city"])}
+                />
+              </Field>
+              <Field label="State" name="address.state" error={errors["address.state"]}>
+                <input
+                  id="field-address.state"
+                  autoComplete="address-level1"
+                  maxLength={60}
+                  placeholder="Telangana"
+                  value={form.address.state}
+                  onChange={(e) => setAddress("state", e.target.value)}
+                  className={inputCls(errors["address.state"])}
+                />
+              </Field>
+              <Field label="PIN code" name="address.pincode" error={errors["address.pincode"]}>
+                <input
+                  id="field-address.pincode"
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  maxLength={6}
+                  placeholder="500081"
+                  value={form.address.pincode}
+                  onChange={(e) => setAddress("pincode", e.target.value.replace(/\D/g, ""))}
+                  className={inputCls(errors["address.pincode"])}
+                />
+              </Field>
+            </div>
+            <p className="mt-3 text-xs text-faint">
+              Sending to several offices? Give the main one here and list the rest in the message.
             </p>
           </Card>
         </div>
@@ -331,19 +416,13 @@ export default function EnquiryPage() {
               </p>
             ) : null}
 
-            <Button
-              type="submit"
-              variant="dark"
-              icon={signedIn ? Send : UserRound}
-              loading={submitting}
-              className="mt-5 w-full"
-            >
-              {signedIn ? "Send enquiry" : "Sign in to send"}
+            <WhatsAppNotice className="mt-5" />
+
+            <Button type="submit" variant="dark" icon={Send} loading={submitting} className="mt-4 w-full">
+              Send enquiry
             </Button>
             <p className="mt-3 text-center text-xs text-faint">
-              {signedIn
-                ? `No payment needed. We'll call you with a quote within ${REPLY_WITHIN_HOURS} hours.`
-                : "Sign in with your mobile number. Everything you've typed stays here."}
+              No payment now. We'll message you within {REPLY_WITHIN_HOURS} hours.
             </p>
           </div>
         </aside>

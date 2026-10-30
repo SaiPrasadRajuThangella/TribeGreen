@@ -4,7 +4,8 @@ import { Link } from "react-router";
 
 import { Badge, CallbackNumber, CardShell, ItemList, Progress } from "@/components/orders";
 import { Button, ButtonLink } from "@/components/ui";
-import { formatINR, OCCASION_META } from "@/data/catalog";
+import { formatINR, occasionMeta } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { useNow } from "@/hooks/useNow";
 import { useSeo } from "@/hooks/useSeo";
 import { useSignOut } from "@/hooks/useSignOut";
@@ -16,7 +17,7 @@ import { daysUntil, formatDate, formatDay, formatTime, relativeDays, replyWindow
 import { formatPhone } from "@/lib/validation";
 import { whatsappUrl } from "@/lib/whatsapp";
 import { useCustomer } from "@/store";
-import { type Enquiry, ORDER_STAGES } from "@/types";
+import type { Enquiry } from "@/types";
 
 const QUOTE_STEPS = ["Enquiry sent", "Quote call", "Order confirmed", "Delivered"];
 
@@ -28,7 +29,10 @@ export default function Orders() {
     noindex: true,
   });
 
-  const { enquiries, loading, error } = useOrdersFeed();
+  const { enquiries, loading: feedLoading, error } = useOrdersFeed();
+  // The order stages come from the API; wait for them so progress bars draw complete
+  const { loading: listsLoading } = useLists();
+  const loading = feedLoading || listsLoading;
   const now = useNow();
 
   const groups = useMemo(() => {
@@ -173,16 +177,13 @@ function DetailsLink({ id }: { id: string }) {
 
 function OrderCard({ enquiry: e, now }: { enquiry: Enquiry; now: number }) {
   const order = e.order;
+  const stages = useLists().lists.orderStages;
 
   // Marked Converted, but prices and dates are not in yet
   if (!order) {
     return (
       <CardShell>
-        <CardHeader
-          enquiry={e}
-          label="Order"
-          meta={`${OCCASION_META[e.occasion].short} · ${e.units} units`}
-        />
+        <CardHeader enquiry={e} label="Order" meta={`${occasionMeta(e.occasion).short} · ${e.units} units`} />
         <p className="mx-5 mb-2 rounded-2xl bg-lime-soft p-4 text-sm text-lime-ink sm:mx-6">
           Your order is confirmed. The final invoice and delivery date will appear here shortly.
         </p>
@@ -199,7 +200,7 @@ function OrderCard({ enquiry: e, now }: { enquiry: Enquiry; now: number }) {
       <CardHeader
         enquiry={e}
         label="Order"
-        meta={`Confirmed ${formatDate(order.confirmedAt)} · ${OCCASION_META[e.occasion].short}`}
+        meta={`Confirmed ${formatDate(order.confirmedAt)} · ${occasionMeta(e.occasion).short}`}
       />
 
       <div className="mx-5 rounded-[22px] bg-ink p-5 text-white sm:mx-6">
@@ -222,7 +223,7 @@ function OrderCard({ enquiry: e, now }: { enquiry: Enquiry; now: number }) {
         ) : (
           <div className="mb-5" />
         )}
-        <Progress steps={ORDER_STAGES} current={ORDER_STAGES.indexOf(order.stage)} dark />
+        <Progress steps={stages} current={stages.indexOf(order.stage)} dark />
       </div>
 
       <ItemList items={order.items} />

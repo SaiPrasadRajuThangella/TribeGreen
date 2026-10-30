@@ -1,8 +1,9 @@
 import { Check, Plus } from "lucide-react";
 
-import { CUSTOMISATION_META, formatINR } from "@/data/catalog";
+import { customisationMeta, formatINR } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { toggleIn } from "@/lib/items";
-import { type Customisation, CUSTOMISATIONS, type Product } from "@/types";
+import type { Customisation, Product } from "@/types";
 
 type Props = {
   product: Product;
@@ -13,10 +14,13 @@ type Props = {
 // "Do you want logo printing? Engraving? Names?" for one gift.
 // Options the product doesn't offer stay visible but can't be picked.
 export function CustomisationPicker({ product, value = [], onChange }: Props) {
+  const { lists, loading } = useLists();
+  // Until the names arrive, show what this gift offers so the picker never sits empty
+  const names = loading ? product.customisations : lists.customisations;
   return (
     <ul className="space-y-2">
-      {CUSTOMISATIONS.map((c) => {
-        const { icon: Icon, hint } = CUSTOMISATION_META[c];
+      {names.map((c) => {
+        const { icon: Icon, hint } = customisationMeta(c);
         const offered = product.customisations.includes(c);
         const on = offered && value.includes(c);
         return (
@@ -85,7 +89,7 @@ export function CustomisationPills({
   return (
     <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Customisation for ${product.name}`}>
       {product.customisations.map((c) => {
-        const { icon: Icon, short } = CUSTOMISATION_META[c];
+        const { icon: Icon, short } = customisationMeta(c);
         const on = value.includes(c);
         return (
           <button

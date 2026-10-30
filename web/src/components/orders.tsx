@@ -2,7 +2,7 @@ import { Check, Pencil, X } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 
-import { CUSTOMISATION_META, formatINR } from "@/data/catalog";
+import { customisationMeta, formatINR } from "@/data/catalog";
 import { useProducts } from "@/hooks/useProducts";
 import { changeCallbackNumber } from "@/lib/api";
 import { describeVariants } from "@/lib/items";
@@ -83,7 +83,7 @@ export function CustomisationTags({ item }: { item: EnquiryItem }) {
   return (
     <span className="mt-1.5 flex flex-wrap gap-1">
       {item.customisations.map((c) => {
-        const { icon: Icon, short } = CUSTOMISATION_META[c];
+        const { icon: Icon, short } = customisationMeta(c);
         return (
           <span
             key={c}

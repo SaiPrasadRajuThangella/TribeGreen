@@ -6,12 +6,12 @@ import { Link } from "react-router";
 import { LoadError } from "@/components/LoadError";
 import { ProductCard, ProductCardSkeleton } from "@/components/ProductCard";
 import { ButtonLink, SectionHeading } from "@/components/ui";
-import { CATEGORY_META, OCCASION_META } from "@/data/catalog";
+import { categoryMeta, occasionMeta } from "@/data/catalog";
 import { BANNER_IMAGES } from "@/data/products";
+import { useLists } from "@/hooks/useLists";
 import { useListToggle } from "@/hooks/useListToggle";
 import { useProducts } from "@/hooks/useProducts";
 import { useSeo } from "@/hooks/useSeo";
-import { CATEGORIES, OCCASIONS } from "@/types";
 
 const fadeUp = {
   initial: { opacity: 0, y: 24 },
@@ -33,8 +33,8 @@ const STEPS = [
   },
   {
     icon: Send,
-    title: "A call back in 2 hrs",
-    body: "Our gifting team calls back with pricing for your quantity and dates.",
+    title: "Confirm on WhatsApp",
+    body: "Our team messages you on WhatsApp with pricing. Orders are confirmed there, and payment is handled in a WhatsApp group.",
   },
   {
     icon: Truck,
@@ -52,6 +52,7 @@ export default function Home() {
   });
 
   const { products, loading, error, retry } = useProducts();
+  const { lists, loading: listsLoading, error: listsError, retry: retryLists } = useLists();
   const { inList, toggle } = useListToggle();
   // Tagged gifts first, topped up to a full two rows of four
   const featured = useMemo(
@@ -142,9 +143,15 @@ export default function Home() {
         <motion.div {...fadeUp}>
           <SectionHeading eyebrow="Shop by category" title="Gifts for every kind of team" />
         </motion.div>
+        {listsError ? <LoadError message={listsError} onRetry={retryLists} /> : null}
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          {CATEGORIES.map((c, i) => {
-            const { icon: Icon, tint } = CATEGORY_META[c];
+          {listsLoading
+            ? Array.from({ length: 4 }, (_, i) => (
+                <div key={i} aria-hidden className="h-[188px] animate-pulse rounded-[28px] bg-card" />
+              ))
+            : null}
+          {lists.categories.map((c, i) => {
+            const { icon: Icon, tint } = categoryMeta(c);
             const count = products.filter((p) => p.category === c).length;
             return (
               <motion.div key={c} {...fadeUp} transition={{ ...fadeUp.transition, delay: i * 0.06 }}>
@@ -213,8 +220,13 @@ export default function Home() {
             </h2>
           </motion.div>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-            {OCCASIONS.map((o) => {
-              const { icon: Icon, short } = OCCASION_META[o];
+            {listsLoading
+              ? Array.from({ length: 6 }, (_, i) => (
+                  <div key={i} aria-hidden className="h-[76px] animate-pulse rounded-3xl bg-white/5" />
+                ))
+              : null}
+            {lists.occasions.map((o) => {
+              const { icon: Icon, short } = occasionMeta(o);
               return (
                 <Link
                   key={o}

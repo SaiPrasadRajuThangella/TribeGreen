@@ -5,6 +5,7 @@ import type {
   Enquiry,
   EnquiryInput,
   EnquiryStatus,
+  Lists,
   OrderChanges,
   OrderDraft,
   Product,
@@ -31,7 +32,8 @@ async function request<T>(path: string, init: RequestInit & { token?: string | n
     throw new ApiError("Can't reach Tribe Green right now. Check your connection and try again.", 0);
   }
   const body = await res.json().catch(() => null);
-  if (!res.ok) throw new ApiError(body?.message ?? "Something went wrong. Try again.", res.status);
+  if (!res.ok)
+    throw new ApiError(body?.message ?? "Something went wrong. Try again.", res.status, body?.errors);
   return body as T;
 }
 
@@ -50,6 +52,9 @@ const json = (method: string, body: unknown) => ({ method, body: JSON.stringify(
 /* ---------- Catalogue ---------- */
 
 export const getProducts = () => request<Product[]>("/api/products");
+
+// Category, occasion, customisation, status and order-stage names
+export const getLists = () => request<Lists>("/api/lists");
 
 /* ---------- Customer sign-in: mobile number + 6-digit code ---------- */
 

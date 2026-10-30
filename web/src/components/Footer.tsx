@@ -1,8 +1,8 @@
 import { Mail, MapPin, MessageCircle } from "lucide-react";
 import { Link } from "react-router";
 
-import { CATEGORIES, OCCASIONS } from "@/types";
-import { OCCASION_META } from "@/data/catalog";
+import { occasionMeta } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { GENERAL_WHATSAPP_MESSAGE, whatsappUrl } from "@/lib/whatsapp";
 
 import { Logo } from "./Header";
@@ -10,6 +10,7 @@ import { Logo } from "./Header";
 const YEAR = new Date().getFullYear();
 
 export function Footer() {
+  const { lists, loading } = useLists();
   return (
     <footer className="mt-24 border-t border-line bg-card">
       <div className="container-page grid gap-10 py-14 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
@@ -30,7 +31,8 @@ export function Footer() {
         </div>
 
         <FooterColumn title="Shop">
-          {CATEGORIES.map((c) => (
+          {loading ? <LinkSkeletons count={4} /> : null}
+          {lists.categories.map((c) => (
             <FooterLink key={c} to={`/catalogue?category=${encodeURIComponent(c)}`}>
               {c}
             </FooterLink>
@@ -38,9 +40,10 @@ export function Footer() {
         </FooterColumn>
 
         <FooterColumn title="Occasions">
-          {OCCASIONS.map((o) => (
+          {loading ? <LinkSkeletons count={6} /> : null}
+          {lists.occasions.map((o) => (
             <FooterLink key={o} to={`/catalogue?occasion=${encodeURIComponent(o)}`}>
-              {OCCASION_META[o].short}
+              {occasionMeta(o).short}
             </FooterLink>
           ))}
         </FooterColumn>
@@ -83,6 +86,12 @@ function FooterColumn({ title, children }: { title: string; children: React.Reac
       <ul className="space-y-2.5">{children}</ul>
     </div>
   );
+}
+
+function LinkSkeletons({ count }: { count: number }) {
+  return Array.from({ length: count }, (_, i) => (
+    <li key={i} aria-hidden className="h-4 w-24 animate-pulse rounded-full bg-soft" />
+  ));
 }
 
 function FooterLink({ to, children }: { to: string; children: React.ReactNode }) {

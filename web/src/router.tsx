@@ -25,13 +25,13 @@ export const router = createBrowserRouter([
       { index: true, Component: Home },
       { path: "catalogue", Component: Catalogue },
       { path: "product/:id", Component: Product },
-      { path: "enquiry", Component: Enquiry },
       { path: "thank-you/:id", Component: ThankYou },
       { path: "login", Component: Login },
-      // My orders belongs to an account
+      // Sending an enquiry and My orders belong to an account; visitors can still browse
       {
         Component: RequireCustomer,
         children: [
+          { path: "enquiry", Component: Enquiry },
           { path: "orders", Component: Orders },
           { path: "orders/:id", Component: OrderDetail },
         ],

@@ -26,7 +26,8 @@ import { Link, useNavigate } from "react-router";
 
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui";
-import { COLOUR_SWATCH, CUSTOMISATION_META, formatINR, getBudgetBand, OCCASION_META } from "@/data/catalog";
+import { COLOUR_SWATCH, customisationMeta, formatINR, getBudgetBand, occasionMeta } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { useNow } from "@/hooks/useNow";
 import { useProducts } from "@/hooks/useProducts";
 import { useSeo } from "@/hooks/useSeo";
@@ -42,19 +43,18 @@ import {
   type EnquiryItem,
   type EnquiryStatus,
   nextStage,
-  ORDER_STAGES,
   type OrderItem,
   type OrderStage,
 } from "@/types";
 
-const STATUSES: EnquiryStatus[] = ["New", "Contacted", "Converted", "Lost"];
-
+// Status names come from the API; a status added there later gets a plain style
 const STATUS_STYLE: Record<EnquiryStatus, string> = {
   New: "bg-lime-soft text-lime-ink",
   Contacted: "bg-[#E2EBF4] text-[#1F4A73]",
   Converted: "bg-ink text-white",
   Lost: "bg-danger-soft text-danger",
 };
+const statusStyle = (s: EnquiryStatus) => STATUS_STYLE[s] ?? "bg-soft text-ink";
 
 type SourceFilter = "all" | "website" | "app";
 
@@ -73,8 +73,12 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
 
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [enquiriesLoading, setLoading] = useState(true);
+  const [enquiriesError, setError] = useState<string | null>(null);
+  // Status and order-stage names for the filters, selects and stage controls
+  const { lists, loading: listsLoading, error: listsError, retry: retryLists } = useLists();
+  const loading = enquiriesLoading || listsLoading;
+  const error = enquiriesError ?? listsError;
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<EnquiryStatus | "all">("all");
   const [source, setSource] = useState<SourceFilter>("all");
@@ -103,7 +107,8 @@ export default function AdminDashboard() {
   const load = useCallback(() => {
     setLoading(true);
     fetchEnquiries();
-  }, [fetchEnquiries]);
+    if (listsError) retryLists();
+  }, [fetchEnquiries, listsError, retryLists]);
 
   useEffect(() => {
     // State is only set after the request resolves, so this is a real external sync
@@ -264,7 +269,7 @@ export default function AdminDashboard() {
             label="Status"
             value={status}
             onChange={setStatus}
-            options={[{ value: "all", label: "All" }, ...STATUSES.map((s) => ({ value: s, label: s }))]}
+            options={[{ value: "all", label: "All" }, ...lists.statuses.map((s) => ({ value: s, label: s }))]}
           />
           <Segmented
             label="Source"
@@ -399,7 +404,7 @@ const Row = memo(function Row({
       </td>
       <td className="max-w-56 px-3 py-4">
         <p className="truncate">{e.products.map((p) => p.name).join(", ")}</p>
-        <p className="text-xs text-muted">{OCCASION_META[e.occasion].short}</p>
+        <p className="text-xs text-muted">{occasionMeta(e.occasion).short}</p>
       </td>
       <td className="px-3 py-4 font-semibold tabular-nums">{e.units.toLocaleString("en-IN")}</td>
       <td className="px-3 py-4">
@@ -429,14 +434,15 @@ function StatusSelect({
   value: EnquiryStatus;
   onChange: (id: string, s: EnquiryStatus) => void;
 }) {
+  const statuses = useLists().lists.statuses;
   return (
     <select
       aria-label={`Status for ${id}`}
       value={value}
       onChange={(e) => onChange(id, e.target.value as EnquiryStatus)}
-      className={`h-9 cursor-pointer rounded-full border-0 px-3 pr-8 text-xs font-semibold outline-none focus:ring-2 focus:ring-ink ${STATUS_STYLE[value]}`}
+      className={`h-9 cursor-pointer rounded-full border-0 px-3 pr-8 text-xs font-semibold outline-none focus:ring-2 focus:ring-ink ${statusStyle(value)}`}
     >
-      {STATUSES.map((s) => (
+      {statuses.map((s) => (
         <option key={s} value={s} className="bg-card text-ink">
           {s}
         </option>
@@ -642,6 +648,19 @@ function DetailDrawer({
                   value={`${getBudgetBand(enquiry.budget)?.label ?? enquiry.budget} (from the gifts)`}
                 />
                 <Detail
+                  label="Deliver to"
+                  value={
+                    enquiry.address ? (
+                      <span className="block max-w-[220px]">
+                        {enquiry.address.line}, {enquiry.address.city}, {enquiry.address.state}{" "}
+                        {enquiry.address.pincode}
+                      </span>
+                    ) : (
+                      <span className="text-faint">Not given (older enquiry)</span>
+                    )
+                  }
+                />
+                <Detail
                   label="Delivery by"
                   value={
                     <span className="inline-flex items-center gap-1.5">
@@ -769,7 +788,7 @@ function GiftSpec({ item }: { item: EnquiryItem & { unitPrice?: number } }) {
       <div className="mt-2 flex flex-wrap gap-1">
         {item.customisations?.length ? (
           item.customisations.map((c) => {
-            const { icon: Icon } = CUSTOMISATION_META[c];
+            const { icon: Icon } = customisationMeta(c);
             return (
               <span
                 key={c}
@@ -891,7 +910,7 @@ function FinaliseOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { en
                 {i.variants?.length ? `${describeVariants(i.variants)} · ` : ""}
                 {i.units} units
                 {i.customisations?.length
-                  ? ` · ${i.customisations.map((c) => CUSTOMISATION_META[c].short).join(", ")}`
+                  ? ` · ${i.customisations.map((c) => customisationMeta(c).short).join(", ")}`
                   : ""}
               </p>
             </div>
@@ -994,9 +1013,10 @@ function ManageOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { enqu
   const [saving, setSaving] = useState<"back" | "forward" | "save" | null>(null);
   const [copied, setCopied] = useState(false);
   const dirty = eta !== order.expectedDelivery || note.trim() !== order.note;
-  const index = ORDER_STAGES.indexOf(order.stage);
-  const prev = nextStage(order.stage, -1);
-  const next = nextStage(order.stage, 1);
+  const stages = useLists().lists.orderStages;
+  const index = stages.indexOf(order.stage);
+  const prev = nextStage(stages, order.stage, -1);
+  const next = nextStage(stages, order.stage, 1);
 
   // Every save carries the date and note, so nothing typed is lost when moving a stage
   const save = async (stage: OrderStage | undefined, kind: "back" | "forward" | "save") => {
@@ -1043,8 +1063,12 @@ function ManageOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { enqu
         >
           <ChevronLeft size={18} />
         </StepButton>
-        <ol aria-label="Order stage" className="grid flex-1 grid-cols-4 gap-1">
-          {ORDER_STAGES.map((st, i) => (
+        <ol
+          aria-label="Order stage"
+          className="grid flex-1 gap-1"
+          style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` }}
+        >
+          {stages.map((st, i) => (
             <li key={st} aria-current={i === index ? "step" : undefined} className="min-w-0">
               <span className={`block h-1.5 rounded-full ${i <= index ? "bg-lime-deep" : "bg-soft"}`} />
               <span

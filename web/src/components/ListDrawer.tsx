@@ -7,10 +7,11 @@ import { formatINR } from "@/data/catalog";
 import { useProducts } from "@/hooks/useProducts";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { lineTotal, quantityProblem } from "@/lib/items";
-import { useEnquiryList } from "@/store";
+import { isSignedIn, useCustomer, useEnquiryList } from "@/store";
 
 import { GiftRow } from "./GiftRow";
 import { Button } from "./ui";
+import { WhatsAppNotice } from "./WhatsAppNotice";
 
 // Slide-over panel with everything the visitor added for a quote
 export function ListDrawer() {
@@ -19,6 +20,8 @@ export function ListDrawer() {
   const items = useEnquiryList((s) => s.items);
   const { byId } = useProducts();
   const navigate = useNavigate();
+  // Sending an enquiry needs an account; the enquiry page sends visitors to sign in first
+  const signedIn = useCustomer(isSignedIn);
 
   const rows = useMemo(
     () =>
@@ -142,16 +145,17 @@ export function ListDrawer() {
                       Finish choosing quantities for the marked gifts.
                     </p>
                   ) : null}
+                  <WhatsAppNotice short className="mt-4" />
                   <Button
                     variant="dark"
                     iconRight={ArrowRight}
-                    className="mt-5 w-full"
+                    className="mt-4 w-full"
                     onClick={() => {
                       setOpen(false);
                       navigate("/enquiry");
                     }}
                   >
-                    Continue to enquiry
+                    {signedIn ? "Continue to enquiry" : "Sign in to continue"}
                   </Button>
                 </div>
               </>

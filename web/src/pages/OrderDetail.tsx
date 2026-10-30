@@ -5,7 +5,8 @@ import { Link, useParams } from "react-router";
 
 import { Badge, CallbackNumber, ItemList } from "@/components/orders";
 import { ButtonLink } from "@/components/ui";
-import { CUSTOMISATION_META, formatINR } from "@/data/catalog";
+import { customisationMeta, formatINR } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { useNow } from "@/hooks/useNow";
 import { useSeo } from "@/hooks/useSeo";
 import { useOrdersFeed } from "@/hooks/useOrdersFeed";
@@ -14,7 +15,7 @@ import { customerStatus } from "@/lib/orderStatus";
 import { daysUntil, formatDate, formatDay, formatTime, relativeDays, replyWindow } from "@/lib/time";
 import { formatPhone } from "@/lib/validation";
 import { whatsappUrl } from "@/lib/whatsapp";
-import { type Enquiry, ORDER_STAGES, type OrderStage } from "@/types";
+import type { Address, Enquiry, OrderStage } from "@/types";
 
 type StepState = "done" | "current" | "upcoming" | "cancelled";
 type Step = { key: string; title: string; at?: string; state: StepState; lines: React.ReactNode[] };
@@ -32,8 +33,8 @@ const STAGE_COPY: Record<OrderStage, { done: string; upcoming: string }> = {
   Delivered: { done: "Delivered. We hope everyone loved them!", upcoming: "" },
 };
 
-// Every phase of an enquiry, from "sent" to "delivered" (or "cancelled")
-function buildSteps(e: Enquiry, now: number): Step[] {
+// Every phase of an enquiry, from "sent" to "delivered" (or "cancelled"). Stages come from the API
+function buildSteps(e: Enquiry, now: number, stages: OrderStage[]): Step[] {
   const order = e.order;
   const called = !!(e.contactedAt || order || e.status === "Contacted" || e.status === "Converted");
   const reply = replyWindow(e.respondBy, now);
@@ -65,10 +66,10 @@ function buildSteps(e: Enquiry, now: number): Step[] {
     },
   ];
 
-  const reached = order ? ORDER_STAGES.indexOf(order.stage) : -1;
-  ORDER_STAGES.forEach((stage, i) => {
+  const reached = order ? stages.indexOf(order.stage) : -1;
+  stages.forEach((stage, i) => {
     const done = i <= reached;
-    const copy = STAGE_COPY[stage];
+    const copy = STAGE_COPY[stage] ?? { done: `${stage}.`, upcoming: "" };
     const lines: React.ReactNode[] = [done ? copy.done : copy.upcoming];
     if (order && stage === "Confirmed" && done) {
       lines.push(`Order total ${formatINR(order.total)}`);
@@ -121,7 +122,9 @@ function buildSteps(e: Enquiry, now: number): Step[] {
 
 export default function OrderDetail() {
   const { id = "" } = useParams();
-  const { enquiries, loading } = useOrdersFeed();
+  const { enquiries, loading: feedLoading } = useOrdersFeed();
+  const { lists, loading: listsLoading } = useLists();
+  const loading = feedLoading || listsLoading;
   const now = useNow();
   const e = enquiries.find((x) => x.id === id);
 
@@ -159,7 +162,7 @@ export default function OrderDetail() {
   }
 
   const order = e.order;
-  const steps = buildSteps(e, now);
+  const steps = buildSteps(e, now, lists.orderStages);
   const status = customerStatus(e);
 
   return (
@@ -210,11 +213,12 @@ export default function OrderDetail() {
             <Row label="Occasion" value={e.occasion} />
             <Row label="Units" value={e.units.toLocaleString("en-IN")} />
             <Row label="Needed by" value={formatDay(e.deliveryDate)} />
+            {e.address ? <Row label="Deliver to" value={formatAddress(e.address)} /> : null}
             <Row
               label="Customisation"
               value={
                 e.customisations.length
-                  ? e.customisations.map((c) => CUSTOMISATION_META[c].short).join(", ")
+                  ? e.customisations.map((c) => customisationMeta(c).short).join(", ")
                   : "None"
               }
             />
@@ -237,6 +241,8 @@ export default function OrderDetail() {
     </div>
   );
 }
+
+const formatAddress = (a: Address) => `${a.line}, ${a.city}, ${a.state} ${a.pincode}`;
 
 function headline(e: Enquiry) {
   const order = e.order;

@@ -111,6 +111,23 @@ export function Chip({
   );
 }
 
+// Chip-shaped placeholders while the names load from the API
+const CHIP_WIDTHS = ["w-24", "w-20", "w-28", "w-24", "w-32", "w-20"];
+
+export function ChipSkeletons({ count = 4, className = "" }: { count?: number; className?: string }) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => (
+        <span
+          key={i}
+          aria-hidden
+          className={`h-10 shrink-0 animate-pulse rounded-full bg-soft ${CHIP_WIDTHS[i % CHIP_WIDTHS.length]} ${className}`}
+        />
+      ))}
+    </>
+  );
+}
+
 export function Spinner({ className = "" }: { className?: string }) {
   return (
     <span

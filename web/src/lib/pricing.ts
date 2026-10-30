@@ -1,4 +1,4 @@
-import { CUSTOMISATIONS, type Customisation, type Product, type ProductData } from "../types.ts";
+import type { Customisation, Product, ProductData } from "../types.ts";
 
 /*
  * Every gift has a base price per unit (plain) and a set extra per unit for each customisation
@@ -6,8 +6,9 @@ import { CUSTOMISATIONS, type Customisation, type Product, type ProductData } fr
  * The backend works prices out the same way (backend/src/lib/pricing.ts).
  */
 
+// What a gift offers is whatever it has a price for (no API needed, so build time works too)
 export const offeredCustomisations = (p: Pick<ProductData, "customisationPrices">) =>
-  CUSTOMISATIONS.filter((c) => typeof p.customisationPrices[c] === "number");
+  Object.keys(p.customisationPrices).filter((c) => typeof p.customisationPrices[c] === "number");
 
 export const unitPrice = (
   p: Pick<ProductData, "basePrice" | "customisationPrices">,
@@ -22,5 +23,5 @@ export const withPricing = (p: ProductData): Product => ({
   ...p,
   customisations: offeredCustomisations(p),
   priceMin: p.basePrice,
-  priceMax: unitPrice(p, [...CUSTOMISATIONS]),
+  priceMax: unitPrice(p, offeredCustomisations(p)),
 });
