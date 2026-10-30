@@ -12,10 +12,11 @@ import {
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { AnimatedSplash } from "@/components/AnimatedSplash";
 import { RemoveGiftDialog } from "@/components/GiftRow";
 import { ItemSheet } from "@/components/ItemSheet";
 import { PortalHost } from "@/components/Portal";
@@ -36,6 +37,9 @@ export default function RootLayout() {
   const customerReady = useCustomer((s) => s.hydrated);
   const hydrated = prefsReady && customerReady;
   const ready = (fontsLoaded || !!fontError) && hydrated;
+  // The 3-second brand intro, drawn over the app while the app loads underneath
+  const [intro, setIntro] = useState(true);
+  const endIntro = useCallback(() => setIntro(false), []);
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
@@ -64,6 +68,7 @@ export default function RootLayout() {
         <RemoveGiftDialog />
         {/* Bottom sheets draw here, above every screen and the tab bar */}
         <PortalHost />
+        {intro && <AnimatedSplash onDone={endIntro} />}
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
