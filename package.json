@@ -1,0 +1,24 @@
+{
+  "name": "tribe-green",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tribe Green catalogue and enquiry system: backend API, website and Android app in one repo",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "postinstall": "npm run setup",
+    "setup": "npm install --prefix backend && npm install --prefix web && npm install --prefix mobile",
+    "dev": "concurrently --names api,web,app --prefix-colors green,blue,magenta \"npm run dev --prefix backend\" \"npm run dev --prefix web\" \"npm run start --prefix mobile\"",
+    "dev:site": "concurrently --names api,web --prefix-colors green,blue \"npm run dev --prefix backend\" \"npm run dev --prefix web\"",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:web": "npm run dev --prefix web",
+    "dev:mobile": "npm run start --prefix mobile",
+    "test": "npm test --prefix backend",
+    "build": "npm run build --prefix backend && npm run build --prefix web",
+    "check": "npm run typecheck --prefix backend && npm run lint --prefix web && npm run typecheck --prefix mobile && npm run lint --prefix mobile"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
+}
