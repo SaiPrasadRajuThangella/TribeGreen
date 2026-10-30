@@ -18,6 +18,12 @@ try {
 export const LOCAL_DB_PORT = 27018;
 const dbPath = fileURLToPath(new URL("../.data/db", import.meta.url));
 
+// Use the MongoDB copy downloaded into backend/node_modules, even when started from the repo root
+// (npm would otherwise point the tool at the root folder and it would download MongoDB again)
+process.env.MONGOMS_DOWNLOAD_DIR ??= fileURLToPath(
+  new URL("../node_modules/.cache/mongodb-memory-server", import.meta.url),
+);
+
 let local: MongoMemoryServer | null = null;
 let uri = process.env.MONGODB_URI;
 

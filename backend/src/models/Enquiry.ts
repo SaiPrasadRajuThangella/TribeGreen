@@ -14,6 +14,7 @@ const itemFields = {
   units: { type: Number, required: true },
   variants: { type: [variantSchema], default: undefined },
   customisations: { type: [String], enum: CUSTOMISATIONS, default: [] },
+  listPrice: Number, // catalogue price per unit with this customisation, when the enquiry was sent
 };
 const itemSchema = new Schema(itemFields, { _id: false, id: false });
 const orderItemSchema = new Schema(
@@ -55,7 +56,7 @@ const enquirySchema = new Schema(
     email: { type: String, required: true },
     occasion: { type: String, enum: OCCASIONS, required: true },
     units: { type: Number, required: true },
-    budget: { type: String, enum: BUDGET_BANDS, required: true },
+    budget: { type: String, enum: BUDGET_BANDS, required: true }, // worked out from the gifts
     deliveryDate: { type: String, required: true }, // yyyy-mm-dd
     products: { type: [itemSchema], required: true },
     customisations: { type: [String], enum: CUSTOMISATIONS, default: [] }, // all gifts together

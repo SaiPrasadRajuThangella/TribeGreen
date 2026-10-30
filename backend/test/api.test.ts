@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import type { Express } from "express";
 import { MongoMemoryServer } from "mongodb-memory-server";
@@ -13,6 +14,10 @@ Object.assign(process.env, {
   ADMIN_PASSWORD: "test-password-123",
   OTP_MODE: "fixed",
   FIXED_OTP: "123456",
+  // The MongoDB copy in backend/node_modules, even when the tests start from the repo root
+  MONGOMS_DOWNLOAD_DIR:
+    process.env.MONGOMS_DOWNLOAD_DIR ??
+    fileURLToPath(new URL("../node_modules/.cache/mongodb-memory-server", import.meta.url)),
 });
 
 let mongo: MongoMemoryServer;
@@ -74,6 +79,15 @@ describe("catalogue", () => {
     const hoodie = res.body.find((p: { id: string }) => p.id === "premium-hoodie");
     assert.deepEqual(hoodie.option.values, ["XS", "S", "M", "L", "XL", "XXL"]);
     assert.equal(hoodie.minOrder, 10);
+  });
+
+  it("prices each gift from its base plus what each customisation adds", async () => {
+    const res = await request(app).get("/api/products/steel-bottle").expect(200);
+    const bottle = res.body;
+    assert.equal(bottle.basePrice, 380);
+    assert.deepEqual(bottle.customisations, ["Logo printing", "Laser engraving", "Name personalisation"]);
+    assert.equal(bottle.priceMin, 380); // plain
+    assert.equal(bottle.priceMax, 380 + 30 + 50 + 30); // every customisation
   });
 
   it("returns one gift, or 404", async () => {
@@ -138,12 +152,17 @@ describe("enquiries", () => {
     const res = await request(app)
       .post("/api/enquiries")
       .set("Authorization", `Bearer ${token}`)
-      .send({ ...validEnquiry(), units: 999, customisations: [] })
+      .send({ ...validEnquiry(), units: 999, customisations: [], budget: "under-500" })
       .expect(201);
     const e = res.body;
     assert.match(e.id, /^TG-[A-Z2-9]{6}$/);
     assert.equal(e.units, 30); // worked out, not the 999 sent
     assert.deepEqual(e.customisations, ["Logo printing", "Name personalisation"]);
+    // Hoodie 1250 + logo 260 + names 180; backpack plain 1650
+    assert.equal(e.products[0].listPrice, 1690);
+    assert.equal(e.products[1].listPrice, 1650);
+    // (20 × 1690 + 10 × 1650) / 30 units ≈ ₹1,677 a unit, whatever budget was sent
+    assert.equal(e.budget, "1500-3000");
     assert.deepEqual(e.products[0].variants.map((v: { label: string }) => v.label), ["M", "L"]);
     assert.equal(e.products[0].name, "Essential Hoodie");
     assert.equal(e.email, "kavya@orbit.example");

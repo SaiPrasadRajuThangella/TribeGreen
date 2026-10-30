@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import {
-  BUDGET_BANDS,
   CUSTOMISATIONS,
   isValidPhone,
   OCCASIONS,
@@ -49,12 +48,11 @@ const itemSchema = z.object({
   customisations: z.array(z.enum(CUSTOMISATIONS)).optional().default([]),
 });
 
-// Total units and the combined customisation list are worked out from the gifts,
-// so whatever a client sends for them is ignored
+// Total units, prices, the budget per unit and the combined customisation list are worked out
+// from the gifts, so whatever a client sends for them is ignored
 export const enquirySchema = profileSchema.extend({
   phone: phoneSchema,
   occasion: z.enum(OCCASIONS, "Pick an occasion"),
-  budget: z.enum(BUDGET_BANDS, "Pick a budget per unit"),
   deliveryDate: dateSchema.refine((d) => d > todayInIndia(), "Delivery date must be in the future"),
   products: z.array(itemSchema).min(1, "Add at least one gift").max(50, "Up to 50 gifts per enquiry"),
   message: z.string().trim().max(500, "Keep the message under 500 characters").optional().default(""),

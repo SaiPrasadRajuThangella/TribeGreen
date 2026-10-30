@@ -29,7 +29,6 @@ export function sampleEnquiries(demoUserId: unknown, now = Date.now()) {
       ...DEMO_CUSTOMER,
       occasion: "New Year Gifts",
       units: 40,
-      budget: "500-1500",
       deliveryDate: inDays(30),
       products: [
         {
@@ -52,7 +51,6 @@ export function sampleEnquiries(demoUserId: unknown, now = Date.now()) {
       ...DEMO_CUSTOMER,
       occasion: "Employee Onboarding",
       units: 45,
-      budget: "1500-3000",
       deliveryDate: inDays(10),
       products: [
         {
@@ -115,7 +113,6 @@ export function sampleEnquiries(demoUserId: unknown, now = Date.now()) {
       email: "priya@northwind.example",
       occasion: "Corporate Diwali Gifting",
       units: 150,
-      budget: "500-1500",
       deliveryDate: inDays(18),
       products: [
         { id: "scented-candle", name: "Spiced Soy Candle", units: 100, customisations: ["Logo printing"] },
@@ -135,7 +132,6 @@ export function sampleEnquiries(demoUserId: unknown, now = Date.now()) {
       email: "sameer@lumen.example",
       occasion: "Employee Recognition",
       units: 110,
-      budget: "1500-3000",
       deliveryDate: inDays(21),
       products: [
         {
@@ -175,7 +171,6 @@ export function sampleEnquiries(demoUserId: unknown, now = Date.now()) {
       email: "rahul.v@brightpath.example",
       occasion: "Employee Onboarding",
       units: 60,
-      budget: "1500-3000",
       deliveryDate: inDays(25),
       products: [
         { id: "laptop-backpack", name: "Metro Laptop Backpack", units: 20, customisations: ["Logo printing"] },
@@ -206,7 +201,6 @@ export function sampleEnquiries(demoUserId: unknown, now = Date.now()) {
       email: "sneha@kestrel.example",
       occasion: "Client and Vendor Gifting",
       units: 40,
-      budget: "above-3000",
       deliveryDate: inDays(9),
       products: [
         { id: "tea-gift-box", name: "Himalayan Tea Collection", units: 40, customisations: ["Laser engraving"] },
@@ -246,7 +240,6 @@ export function sampleEnquiries(demoUserId: unknown, now = Date.now()) {
       email: "arjun@helix.example",
       occasion: "Events and Trade Shows",
       units: 500,
-      budget: "under-500",
       deliveryDate: inDays(4),
       products: [
         {

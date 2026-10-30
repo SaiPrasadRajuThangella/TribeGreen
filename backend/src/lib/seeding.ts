@@ -2,11 +2,25 @@ import bcrypt from "bcryptjs";
 
 import { config } from "../config.js";
 import { PRODUCTS } from "../data/products.js";
+import type { Customisation } from "../domain.js";
 import { DEMO_CUSTOMER, sampleEnquiries } from "../data/samples.js";
 import { Admin } from "../models/Admin.js";
 import { Enquiry } from "../models/Enquiry.js";
 import { Product } from "../models/Product.js";
 import { User } from "../models/User.js";
+
+import { budgetBandFor, unitPrice } from "./pricing.js";
+
+// Sample gifts get today's catalogue price, and the enquiry its budget per unit, like real ones
+function priceSample<T extends { products: { id: string; units: number; customisations: string[] }[] }>(doc: T) {
+  const products = doc.products.map((item) => {
+    const product = PRODUCTS.find((p) => p.id === item.id)!;
+    return { ...item, listPrice: unitPrice(product, item.customisations as Customisation[]) };
+  });
+  const units = products.reduce((sum, p) => sum + p.units, 0);
+  const estimate = products.reduce((sum, p) => sum + p.units * p.listPrice, 0);
+  return { ...doc, products, budget: budgetBandFor(estimate / units) };
+}
 
 // The catalogue in code is the source of truth: insert new gifts, update changed ones
 export async function syncCatalogue() {
@@ -40,7 +54,7 @@ export async function seedSamples({ reset = false } = {}) {
   if (reset) await Enquiry.deleteMany({});
   if ((await Enquiry.estimatedDocumentCount()) > 0) return 0;
   const demo = await ensureDemoCustomer();
-  const docs = sampleEnquiries(demo._id);
+  const docs = sampleEnquiries(demo._id).map(priceSample);
   await Enquiry.insertMany(docs);
   return docs.length;
 }

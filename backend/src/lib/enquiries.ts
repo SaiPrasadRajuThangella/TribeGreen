@@ -7,6 +7,7 @@ import { Product } from "../models/Product.js";
 
 import { badRequest, HttpError } from "./errors.js";
 import { newEnquiryRef, newTrackingNumber } from "./ids.js";
+import { budgetBandFor, offeredCustomisations, unitPrice } from "./pricing.js";
 import type { enquirySchema, ItemInput, orderChangesSchema, orderDraftSchema } from "./validation.js";
 
 const HOUR = 3600000;
@@ -54,15 +55,18 @@ export async function buildItems(input: ItemInput[]) {
     }
 
     if (item.units < min) fail(`${product.name} needs at least ${min} units`);
-    const notOffered = item.customisations.filter((c) => !product.customisations.includes(c));
+    const offered = offeredCustomisations(product);
+    const notOffered = item.customisations.filter((c) => !offered.includes(c));
     if (notOffered.length) fail(`${product.name} doesn't offer ${notOffered.join(", ").toLowerCase()}`);
+    const customisations = CUSTOMISATIONS.filter((c) => item.customisations.includes(c));
 
     return {
       id: product._id,
       name: product.name,
       units: item.units,
       ...(variants ? { variants } : {}),
-      customisations: CUSTOMISATIONS.filter((c) => item.customisations.includes(c)),
+      customisations,
+      listPrice: unitPrice(product, customisations),
     };
   });
 
@@ -79,11 +83,14 @@ const isDuplicateRef = (err: unknown) =>
 export async function createEnquiry(input: z.output<typeof enquirySchema>, userId?: string) {
   const products = await buildItems(input.products);
   const createdAt = new Date();
+  const units = products.reduce((sum, p) => sum + p.units, 0);
+  const estimate = products.reduce((sum, p) => sum + p.units * p.listPrice, 0);
   const fields = {
     ...input,
     products,
     user: userId,
-    units: products.reduce((sum, p) => sum + p.units, 0),
+    units,
+    budget: budgetBandFor(estimate / units),
     customisations: CUSTOMISATIONS.filter((c) => products.some((p) => p.customisations.includes(c))),
     respondBy: new Date(createdAt.getTime() + config.REPLY_WITHIN_HOURS * HOUR),
     createdAt,

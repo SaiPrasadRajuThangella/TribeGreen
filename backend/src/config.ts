@@ -15,7 +15,7 @@ const schema = z.object({
   JWT_SECRET: isProduction
     ? z.string().min(32, "JWT_SECRET must be at least 32 characters in production")
     : z.string().default("dev-only-secret-change-me-dev-only-secret"),
-  CORS_ORIGIN: z.string().default("http://localhost:5173,http://localhost:4173"),
+  CORS_ORIGIN: z.string().default("http://localhost:5173,http://localhost:4173,http://localhost:8081"),
   ADMIN_USERNAME: z.string().min(3).default("admin"),
   // The demo password only applies locally; a live server must set its own
   ADMIN_PASSWORD: isProduction ? z.string().min(8) : z.string().min(8).default("tribegreen"),
