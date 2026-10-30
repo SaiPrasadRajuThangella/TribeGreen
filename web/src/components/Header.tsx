@@ -84,8 +84,6 @@ export function Header() {
           >
             <Search size={19} />
           </Link>
-          {/* On phones the account lives in the menu, to keep the header from overflowing */}
-          <AccountButton />
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -119,6 +117,8 @@ export function Header() {
           >
             {menuOpen ? <X size={19} /> : <Menu size={19} />}
           </button>
+          {/* Last on the right. On phones the account lives in the menu instead */}
+          <AccountButton />
         </div>
       </div>
 

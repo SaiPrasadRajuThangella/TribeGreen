@@ -32,15 +32,21 @@ export type Product = {
   category: Category;
   shortDescription: string;
   description: string;
-  priceMin: number;
-  priceMax: number;
+  basePrice: number; // per unit, plain
+  customisationPrices: Partial<Record<Customisation, number>>; // extra per unit, for what it offers
   occasions: Occasion[];
-  customisations: Customisation[];
   images: string[];
   minOrder: number;
   option?: ProductOption;
   tag?: "Bestseller" | "New" | "Eco";
+  // Worked out by the API from the prices above
+  customisations: Customisation[]; // what it offers, in the standard order
+  priceMin: number; // plain
+  priceMax: number; // with every customisation
 };
+
+// A product as written in data files, before the worked-out fields
+export type ProductData = Omit<Product, "customisations" | "priceMin" | "priceMax">;
 
 export type VariantQty = { label: string; units: number };
 
@@ -52,6 +58,7 @@ export type EnquiryItem = {
   units: number;
   variants?: VariantQty[];
   customisations?: Customisation[];
+  listPrice?: number; // catalogue price per unit with this customisation, set by the server
 };
 
 export type EnquiryStatus = "New" | "Contacted" | "Converted" | "Lost";
@@ -63,7 +70,6 @@ export type EnquiryInput = {
   email: string;
   occasion: Occasion;
   units: number;
-  budget: BudgetBandId;
   deliveryDate: string; // ISO date (yyyy-mm-dd)
   products: EnquiryItem[];
   customisations: Customisation[]; // everything asked for across the gifts
@@ -102,6 +108,7 @@ export type Enquiry = EnquiryInput & {
   status: EnquiryStatus;
   createdAt: string;
   respondBy: string; // the team promises a call back by this time
+  budget: BudgetBandId; // the brief's "budget per unit", worked out by the server from the gifts
   contactedAt?: string; // first marked Contacted
   closedAt?: string; // marked Lost
   closedReason?: string; // e.g. "Quote not agreed"

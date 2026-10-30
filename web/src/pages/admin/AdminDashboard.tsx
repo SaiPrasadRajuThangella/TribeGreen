@@ -33,7 +33,8 @@ import { useSeo } from "@/hooks/useSeo";
 import { ApiError, finaliseOrder, getEnquiries, updateEnquiryStatus, updateOrder } from "@/lib/api";
 import { REPLY_WITHIN_HOURS } from "@/lib/config";
 import { downloadCsv } from "@/lib/csv";
-import { describeVariants } from "@/lib/items";
+import { describeVariants, enquiryEstimate } from "@/lib/items";
+import { unitPrice } from "@/lib/pricing";
 import { formatDay, formatTime, replyWindow } from "@/lib/time";
 import { useAuth } from "@/store";
 import {
@@ -633,9 +634,12 @@ function DetailDrawer({
                 <Detail label="Email" value={enquiry.email} />
                 <Detail label="Occasion" value={enquiry.occasion} />
                 <Detail label="Units" value={enquiry.units.toLocaleString("en-IN")} />
+                {enquiryEstimate(enquiry.products) ? (
+                  <Detail label="Estimated total" value={formatINR(enquiryEstimate(enquiry.products))} />
+                ) : null}
                 <Detail
-                  label="Budget"
-                  value={`${getBudgetBand(enquiry.budget)?.label ?? enquiry.budget} / unit`}
+                  label="Budget per unit"
+                  value={`${getBudgetBand(enquiry.budget)?.label ?? enquiry.budget} (from the gifts)`}
                 />
                 <Detail
                   label="Delivery by"
@@ -735,8 +739,12 @@ function GiftSpec({ item }: { item: EnquiryItem & { unitPrice?: number } }) {
         </Link>
         <span className="shrink-0 text-sm font-semibold tabular-nums">
           {item.units} units
-          {item.unitPrice ? (
-            <span className="font-normal text-muted"> × {formatINR(item.unitPrice)}</span>
+          {item.unitPrice || item.listPrice ? (
+            <span className="font-normal text-muted">
+              {" "}
+              × {formatINR(item.unitPrice ?? item.listPrice ?? 0)}
+              {item.unitPrice ? "" : " list"}
+            </span>
           ) : null}
         </span>
       </div>
@@ -796,10 +804,16 @@ function FinaliseOrder({ enquiry, token, onSaved, onError }: SaveHandlers & { en
   const [saving, setSaving] = useState(false);
   const [askLost, setAskLost] = useState(false);
 
-  // Start from the catalogue's lowest price for each gift
+  // Start from each gift's catalogue price with its customisation; the admin can change it
   const start = () =>
     setPrices(
-      Object.fromEntries(enquiry.products.map((p) => [p.id, String(byId.get(p.id)?.priceMin ?? "")])),
+      Object.fromEntries(
+        enquiry.products.map((p) => {
+          const product = byId.get(p.id);
+          const list = p.listPrice ?? (product ? unitPrice(product, p.customisations) : undefined);
+          return [p.id, list ? String(list) : ""];
+        }),
+      ),
     );
 
   const markLost = async () => {

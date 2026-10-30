@@ -5,10 +5,11 @@ import { Link, useParams } from "react-router";
 
 import { Badge, CallbackNumber, ItemList } from "@/components/orders";
 import { ButtonLink } from "@/components/ui";
-import { CUSTOMISATION_META, formatINR, getBudgetBand } from "@/data/catalog";
+import { CUSTOMISATION_META, formatINR } from "@/data/catalog";
 import { useNow } from "@/hooks/useNow";
 import { useSeo } from "@/hooks/useSeo";
 import { useOrdersFeed } from "@/hooks/useOrdersFeed";
+import { enquiryEstimate } from "@/lib/items";
 import { customerStatus } from "@/lib/orderStatus";
 import { daysUntil, formatDate, formatDay, formatTime, relativeDays, replyWindow } from "@/lib/time";
 import { formatPhone } from "@/lib/validation";
@@ -194,9 +195,9 @@ export default function OrderDetail() {
             <h2 className="px-6 pt-6 text-lg font-bold sm:px-7">Gifts</h2>
             <ItemList items={order?.items ?? e.products} />
             <div className="flex items-center justify-between border-t border-line px-5 py-4 sm:px-6">
-              <span className="text-sm text-muted">{order ? "Order total" : "Total units"}</span>
+              <span className="text-sm text-muted">{order ? "Order total" : "Estimated total"}</span>
               <span className="text-lg font-extrabold tabular-nums">
-                {order ? formatINR(order.total) : e.units.toLocaleString("en-IN")}
+                {formatINR(order ? order.total : enquiryEstimate(e.products))}
               </span>
             </div>
           </section>
@@ -207,7 +208,7 @@ export default function OrderDetail() {
 
           <dl className="divide-y divide-line rounded-[28px] bg-card px-6 text-sm">
             <Row label="Occasion" value={e.occasion} />
-            <Row label="Budget" value={`${getBudgetBand(e.budget)?.label} / unit`} />
+            <Row label="Units" value={e.units.toLocaleString("en-IN")} />
             <Row label="Needed by" value={formatDay(e.deliveryDate)} />
             <Row
               label="Customisation"

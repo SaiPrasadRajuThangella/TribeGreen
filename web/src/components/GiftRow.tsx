@@ -2,9 +2,9 @@ import { Pencil, Trash2 } from "lucide-react";
 import { memo } from "react";
 import { Link } from "react-router";
 
-import { formatPriceRange } from "@/data/catalog";
+import { formatINR } from "@/data/catalog";
 import { useProducts } from "@/hooks/useProducts";
-import { quantityProblem } from "@/lib/items";
+import { lineTotal, priceFor, quantityProblem } from "@/lib/items";
 import { type ListItem, useEnquiryList } from "@/store";
 import type { Product } from "@/types";
 
@@ -46,7 +46,12 @@ export const GiftRow = memo(function GiftRow({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{product.name}</p>
-            <p className="text-xs text-muted">{formatPriceRange(product)} / unit</p>
+            <p className="text-xs text-muted tabular-nums">
+              {formatINR(priceFor(product, item))} / unit
+              {item.units ? (
+                <span className="font-semibold text-ink"> · {formatINR(lineTotal(product, item))}</span>
+              ) : null}
+            </p>
           </div>
           <button
             type="button"

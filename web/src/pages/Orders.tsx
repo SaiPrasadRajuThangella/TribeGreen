@@ -4,12 +4,13 @@ import { Link } from "react-router";
 
 import { Badge, CallbackNumber, CardShell, ItemList, Progress } from "@/components/orders";
 import { Button, ButtonLink } from "@/components/ui";
-import { formatINR, getBudgetBand, OCCASION_META } from "@/data/catalog";
+import { formatINR, OCCASION_META } from "@/data/catalog";
 import { useNow } from "@/hooks/useNow";
 import { useSeo } from "@/hooks/useSeo";
 import { useSignOut } from "@/hooks/useSignOut";
 import { useOrdersFeed } from "@/hooks/useOrdersFeed";
 import { REPLY_WITHIN_HOURS } from "@/lib/config";
+import { enquiryEstimate } from "@/lib/items";
 import { customerStatus } from "@/lib/orderStatus";
 import { daysUntil, formatDate, formatDay, formatTime, relativeDays, replyWindow } from "@/lib/time";
 import { formatPhone } from "@/lib/validation";
@@ -313,9 +314,11 @@ function QuoteCard({ enquiry: e, now }: { enquiry: Enquiry; now: number }) {
           <CalendarDays size={15} /> Needed by{" "}
           <span className="font-semibold text-ink">{formatDay(e.deliveryDate)}</span>
         </span>
-        <span className="text-muted">
-          Budget <span className="font-semibold text-ink">{getBudgetBand(e.budget)?.label} / unit</span>
-        </span>
+        {enquiryEstimate(e.products) ? (
+          <span className="text-muted">
+            Estimated <span className="font-semibold text-ink">{formatINR(enquiryEstimate(e.products))}</span>
+          </span>
+        ) : null}
       </div>
       <DetailsLink id={e.id} />
     </CardShell>

@@ -1,4 +1,6 @@
 import { MIN_ORDER } from "@/data/products";
+
+import { unitPrice } from "./pricing";
 import type { Customisation, EnquiryItem, Product, VariantQty } from "@/types";
 
 // Quantity of one gift: a plain number, or units per size / colour
@@ -46,10 +48,13 @@ export function quantityProblem(product: Product | undefined, qty: Quantity) {
   return null;
 }
 
-export const estimateFor = (product: Product, units: number) => ({
-  min: units * product.priceMin,
-  max: units * product.priceMax,
-});
+// Price per unit with what was picked, and the total for the units
+export const priceFor = (product: Product, choice: Choice) => unitPrice(product, choice.customisations);
+export const lineTotal = (product: Product, choice: Choice) => choice.units * priceFor(product, choice);
+
+// What a sent enquiry comes to at catalogue prices (older enquiries without prices count 0)
+export const enquiryEstimate = (items: EnquiryItem[]) =>
+  items.reduce((sum, i) => sum + i.units * (i.listPrice ?? 0), 0);
 
 export const toEnquiryItem = (product: Product, choice: Choice): EnquiryItem => ({
   id: product.id,

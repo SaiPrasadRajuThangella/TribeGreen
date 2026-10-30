@@ -2,10 +2,17 @@ import { Check, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 
-import { formatINR, formatPriceRange } from "@/data/catalog";
+import { formatINR } from "@/data/catalog";
 import { useProducts } from "@/hooks/useProducts";
 import { useScrollLock } from "@/hooks/useScrollLock";
-import { type Choice, cleanCustomisations, defaultQuantity, estimateFor, quantityProblem } from "@/lib/items";
+import {
+  type Choice,
+  cleanCustomisations,
+  defaultQuantity,
+  lineTotal,
+  priceFor,
+  quantityProblem,
+} from "@/lib/items";
 import { useEnquiryList } from "@/store";
 import type { Product } from "@/types";
 
@@ -36,7 +43,7 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
       : defaultQuantity(product),
   );
   const problem = quantityProblem(product, qty);
-  const estimate = estimateFor(product, qty.units);
+
   const optionName = product.option?.name.toLowerCase() ?? "quantity";
   const [a, b] = product.option?.name === "Size" ? ["M", "L"] : (product.option?.values ?? []);
 
@@ -76,7 +83,7 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
           <img src={product.images[0]} alt="" className="size-16 rounded-2xl bg-soft object-cover" />
           <div className="min-w-0 flex-1">
             <p className="truncate font-bold">{product.name}</p>
-            <p className="text-sm text-muted">{formatPriceRange(product)} / unit</p>
+            <p className="text-sm text-muted">{formatINR(priceFor(product, qty))} / unit with your choices</p>
           </div>
           <button
             type="button"
@@ -115,7 +122,13 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
             <p className="text-lg font-extrabold tabular-nums">{qty.units.toLocaleString("en-IN")} units</p>
           </div>
           <p className="text-right text-sm text-muted">
-            {qty.units ? `${formatINR(estimate.min)} – ${formatINR(estimate.max)}` : "Estimate shows here"}
+            {qty.units ? (
+              <>
+                Estimated <span className="font-bold text-ink">{formatINR(lineTotal(product, qty))}</span>
+              </>
+            ) : (
+              "Estimate shows here"
+            )}
           </p>
         </div>
         {problem && qty.units > 0 ? <p className="mt-2 text-sm text-danger">{problem}</p> : null}

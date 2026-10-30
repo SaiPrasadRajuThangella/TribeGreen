@@ -5,12 +5,12 @@ import { Link, useNavigate } from "react-router";
 
 import { GiftRow } from "@/components/GiftRow";
 import { Button, Chip } from "@/components/ui";
-import { BUDGET_BANDS, formatINR, OCCASION_META } from "@/data/catalog";
+import { formatINR, OCCASION_META } from "@/data/catalog";
 import { useProducts } from "@/hooks/useProducts";
 import { useSeo } from "@/hooks/useSeo";
 import { createEnquiry } from "@/lib/api";
 import { REPLY_WITHIN_HOURS } from "@/lib/config";
-import { allCustomisations, estimateFor, quantityProblem, toEnquiryItem } from "@/lib/items";
+import { allCustomisations, lineTotal, quantityProblem, toEnquiryItem } from "@/lib/items";
 import {
   formatPhone,
   type EnquiryFormErrors,
@@ -32,7 +32,7 @@ const tomorrow = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10
 export default function EnquiryPage() {
   useSeo({
     title: "Request a quote",
-    description: `Tell us about your corporate gifting needs: occasion, quantity, budget and delivery date. Our team calls you back within ${REPLY_WITHIN_HOURS} hours.`,
+    description: `Tell us about your corporate gifting needs: occasion, gifts, quantity and delivery date. Our team calls you back within ${REPLY_WITHIN_HOURS} hours.`,
     path: "/enquiry",
   });
 
@@ -63,11 +63,11 @@ export default function EnquiryPage() {
   const totals = useMemo(
     () =>
       gifts.reduce(
-        (acc, { item, product }) => {
-          const e = estimateFor(product, item.units);
-          return { units: acc.units + item.units, min: acc.min + e.min, max: acc.max + e.max };
-        },
-        { units: 0, min: 0, max: 0 },
+        (acc, { item, product }) => ({
+          units: acc.units + item.units,
+          total: acc.total + lineTotal(product, item),
+        }),
+        { units: 0, total: 0 },
       ),
     [gifts],
   );
@@ -83,7 +83,6 @@ export default function EnquiryPage() {
     message: "",
     ...draft,
     occasion: draft.occasion as EnquiryFormValues["occasion"],
-    budget: draft.budget as EnquiryFormValues["budget"],
     units: totals.units,
     products,
     // Chosen per gift; the enquiry also keeps the combined list (the app and CSV use it)
@@ -252,18 +251,6 @@ export default function EnquiryPage() {
             </div>
 
             <div className="mt-5">
-              <Field label="Budget per unit" name="budget" error={errors.budget} as="fieldset">
-                <div id="field-budget" tabIndex={-1} className="flex flex-wrap gap-2 outline-none">
-                  {BUDGET_BANDS.map((b) => (
-                    <Chip key={b.id} selected={form.budget === b.id} onClick={() => set("budget", b.id)}>
-                      {b.label}
-                    </Chip>
-                  ))}
-                </div>
-              </Field>
-            </div>
-
-            <div className="mt-5">
               <Field label="Message" name="message" error={errors.message} optional>
                 <textarea
                   id="field-message"
@@ -329,11 +316,12 @@ export default function EnquiryPage() {
                   <span className="font-semibold tabular-nums">{totals.units.toLocaleString("en-IN")}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted">Estimated budget</span>
-                  <span className="font-semibold tabular-nums">
-                    {formatINR(totals.min)} – {formatINR(totals.max)}
-                  </span>
+                  <span className="text-muted">Estimated total</span>
+                  <span className="font-semibold tabular-nums">{formatINR(totals.total)}</span>
                 </div>
+                <p className="text-xs text-faint">
+                  At catalogue prices with your customisation. The quote confirms it.
+                </p>
               </div>
             ) : null}
 

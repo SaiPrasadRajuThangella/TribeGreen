@@ -46,7 +46,6 @@ export const enquirySchema = z.object({
     .int("Units must be a whole number")
     .min(MIN_ORDER, `Minimum order is ${MIN_ORDER} units`)
     .max(100000, "For orders above 1,00,000 units, chat with us"),
-  budget: z.enum(["under-500", "500-1500", "1500-3000", "above-3000"], "Pick a budget per unit"),
   deliveryDate: z
     .string("Pick a delivery date")
     .min(1, "Pick a delivery date")

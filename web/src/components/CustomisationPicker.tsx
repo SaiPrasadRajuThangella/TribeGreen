@@ -1,6 +1,6 @@
 import { Check, Plus } from "lucide-react";
 
-import { CUSTOMISATION_META } from "@/data/catalog";
+import { CUSTOMISATION_META, formatINR } from "@/data/catalog";
 import { toggleIn } from "@/lib/items";
 import { type Customisation, CUSTOMISATIONS, type Product } from "@/types";
 
@@ -43,7 +43,14 @@ export function CustomisationPicker({ product, value = [], onChange }: Props) {
                 <Icon size={17} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className={`block text-sm font-semibold ${offered ? "" : "text-faint"}`}>{c}</span>
+                <span className={`block text-sm font-semibold ${offered ? "" : "text-faint"}`}>
+                  {c}
+                  {offered ? (
+                    <span className="ml-1.5 font-semibold text-lime-ink">
+                      +{formatINR(product.customisationPrices[c] ?? 0)}
+                    </span>
+                  ) : null}
+                </span>
                 <span className="block text-xs text-muted">
                   {offered ? hint : "Not offered for this gift"}
                 </span>
@@ -97,6 +104,9 @@ export function CustomisationPills({
           >
             {on ? <Check size={12} strokeWidth={3} /> : <Icon size={12} />}
             {short}
+            <span className={on ? "text-ink/60" : "text-faint"}>
+              +{formatINR(product.customisationPrices[c] ?? 0)}
+            </span>
           </button>
         );
       })}

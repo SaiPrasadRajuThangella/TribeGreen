@@ -24,7 +24,14 @@ import { useListToggle } from "@/hooks/useListToggle";
 import { useProducts } from "@/hooks/useProducts";
 import { shareImageFor, useSeo } from "@/hooks/useSeo";
 import { SITE_URL } from "@/lib/config";
-import { type Choice, cleanCustomisations, defaultQuantity, estimateFor, quantityProblem } from "@/lib/items";
+import {
+  type Choice,
+  cleanCustomisations,
+  defaultQuantity,
+  lineTotal,
+  priceFor,
+  quantityProblem,
+} from "@/lib/items";
 import { productWhatsAppMessage, whatsappUrl } from "@/lib/whatsapp";
 import { useEnquiryList } from "@/store";
 import type { Product } from "@/types";
@@ -78,7 +85,8 @@ function ProductDetail({ product }: { product: Product }) {
   // What the visitor is editing, else what is already in their list, else a fresh start
   const qty: Choice = edited ?? listed ?? defaultQuantity(product);
   const problem = quantityProblem(product, qty);
-  const estimate = estimateFor(product, qty.units);
+  const price = priceFor(product, qty);
+  const total = lineTotal(product, qty);
   const inList = !!listed;
   const dirty = edited !== null;
   const optionName = product.option?.name.toLowerCase();
@@ -172,9 +180,19 @@ function ProductDetail({ product }: { product: Product }) {
             </h1>
             <p className="mt-3 text-lg text-muted">{product.shortDescription}</p>
 
-            <div className="mt-6 flex items-end gap-3">
-              <p className="text-3xl font-extrabold">{formatINR(product.priceMin)}</p>
-              <p className="pb-1 text-sm text-muted">– {formatINR(product.priceMax)} per unit, by quantity</p>
+            <div className="mt-6 flex flex-wrap items-end gap-x-3 gap-y-1">
+              <p className="text-3xl font-extrabold">
+                {formatINR(product.priceMin)}
+                {product.priceMax > product.priceMin ? (
+                  <span className="text-muted"> – {formatINR(product.priceMax)}</span>
+                ) : null}
+              </p>
+              <p className="pb-1 text-sm text-muted">
+                per unit · {formatINR(product.priceMin)} plain
+                {product.priceMax > product.priceMin
+                  ? `, ${formatINR(product.priceMax)} with every customisation`
+                  : ""}
+              </p>
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-3">
@@ -223,9 +241,16 @@ function ProductDetail({ product }: { product: Product }) {
                 </div>
               )}
               <p className="mt-3 text-sm text-muted">
-                {qty.units
-                  ? `Estimated ${formatINR(estimate.min)} – ${formatINR(estimate.max)}`
-                  : `Add units to each ${optionName} you need to see an estimate`}
+                Your price <span className="font-semibold text-ink">{formatINR(price)} / unit</span>
+                {qty.units ? (
+                  <>
+                    {" "}
+                    · <span className="font-semibold text-ink">{formatINR(total)}</span> for{" "}
+                    {qty.units.toLocaleString("en-IN")} units
+                  </>
+                ) : (
+                  ` · add units to each ${optionName} you need`
+                )}
               </p>
               {problem && (tried || qty.units > 0) ? (
                 <p role="alert" className="mt-2 text-sm font-medium text-danger">

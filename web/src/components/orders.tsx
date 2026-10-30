@@ -117,11 +117,14 @@ export function ItemList({ items }: { items: (EnquiryItem & { unitPrice?: number
             </p>
             <CustomisationTags item={item} />
           </div>
-          {item.unitPrice ? (
+          {item.unitPrice || item.listPrice ? (
             <div className="text-right">
-              <p className="font-semibold tabular-nums">{formatINR(item.units * item.unitPrice)}</p>
+              <p className="font-semibold tabular-nums">
+                {formatINR(item.units * (item.unitPrice ?? item.listPrice ?? 0))}
+              </p>
               <p className="text-xs text-muted tabular-nums">
-                {item.units} × {formatINR(item.unitPrice)}
+                {item.units} × {formatINR(item.unitPrice ?? item.listPrice ?? 0)}
+                {item.unitPrice ? "" : " est."}
               </p>
             </div>
           ) : (

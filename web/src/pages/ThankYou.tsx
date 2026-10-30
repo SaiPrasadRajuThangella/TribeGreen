@@ -4,10 +4,10 @@ import { Link, useLocation, useParams } from "react-router";
 
 import { CustomisationTags } from "@/components/orders";
 import { ButtonLink } from "@/components/ui";
-import { getBudgetBand, OCCASION_META } from "@/data/catalog";
+import { formatINR, OCCASION_META } from "@/data/catalog";
 import { useSeo } from "@/hooks/useSeo";
 import { REPLY_WITHIN_HOURS } from "@/lib/config";
-import { describeVariants } from "@/lib/items";
+import { describeVariants, enquiryEstimate } from "@/lib/items";
 import { formatTime } from "@/lib/time";
 import { whatsappUrl } from "@/lib/whatsapp";
 import type { Enquiry } from "@/types";
@@ -86,7 +86,9 @@ export default function ThankYou() {
           </div>
           <Row label="Total units" value={enquiry.units.toLocaleString("en-IN")} />
           <Row label="Occasion" value={OCCASION_META[enquiry.occasion].short} />
-          <Row label="Budget" value={`${getBudgetBand(enquiry.budget)?.label} / unit`} />
+          {enquiryEstimate(enquiry.products) ? (
+            <Row label="Estimated total" value={formatINR(enquiryEstimate(enquiry.products))} />
+          ) : null}
         </motion.dl>
       ) : id ? (
         <p className="mt-6 text-sm text-muted">

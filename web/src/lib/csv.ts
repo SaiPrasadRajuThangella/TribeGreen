@@ -1,7 +1,7 @@
 import { getBudgetBand } from "@/data/catalog";
 import type { Enquiry, EnquiryItem } from "@/types";
 
-import { describeVariants } from "./items";
+import { describeVariants, enquiryEstimate } from "./items";
 
 // "Essential Hoodie × 60 (M × 20 · L × 40) [Logo printing, Name personalisation]"
 const giftCell = (p: EnquiryItem) =>
@@ -21,6 +21,7 @@ const COLUMNS: [string, (e: Enquiry) => string | number][] = [
   ["Email", (e) => e.email],
   ["Occasion", (e) => e.occasion],
   ["Units", (e) => e.units],
+  ["Estimated total", (e) => enquiryEstimate(e.products) || ""],
   ["Budget per unit", (e) => getBudgetBand(e.budget)?.label ?? e.budget],
   ["Delivery date", (e) => e.deliveryDate],
   ["Products", (e) => e.products.map(giftCell).join("; ")],

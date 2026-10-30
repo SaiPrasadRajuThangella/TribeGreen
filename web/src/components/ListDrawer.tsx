@@ -6,7 +6,7 @@ import { useNavigate } from "react-router";
 import { formatINR } from "@/data/catalog";
 import { useProducts } from "@/hooks/useProducts";
 import { useScrollLock } from "@/hooks/useScrollLock";
-import { quantityProblem } from "@/lib/items";
+import { lineTotal, quantityProblem } from "@/lib/items";
 import { useEnquiryList } from "@/store";
 
 import { GiftRow } from "./GiftRow";
@@ -32,10 +32,9 @@ export function ListDrawer() {
       rows.reduce(
         (acc, { item, product }) => ({
           units: acc.units + item.units,
-          min: acc.min + item.units * product.priceMin,
-          max: acc.max + item.units * product.priceMax,
+          total: acc.total + lineTotal(product, item),
         }),
-        { units: 0, min: 0, max: 0 },
+        { units: 0, total: 0 },
       ),
     [rows],
   );
@@ -130,12 +129,12 @@ export function ListDrawer() {
                     <span className="font-semibold tabular-nums">{totals.units.toLocaleString("en-IN")}</span>
                   </div>
                   <div className="mt-2 flex items-end justify-between">
-                    <span className="text-sm text-muted">Estimated budget</span>
+                    <span className="text-sm text-muted">Estimated total</span>
                     <span className="text-right">
                       <span className="block text-xl font-extrabold tabular-nums">
-                        {formatINR(totals.min)}
+                        {formatINR(totals.total)}
                       </span>
-                      <span className="text-xs text-muted">up to {formatINR(totals.max)}</span>
+                      <span className="text-xs text-muted">at catalogue prices; the quote confirms it</span>
                     </span>
                   </div>
                   {needsAttention ? (
