@@ -1,8 +1,8 @@
 import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams } from "expo-router";
-import { PackageSearch, X } from "lucide-react-native";
+import { PackageSearch, WifiOff, X } from "lucide-react-native";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, type TextInputInstance, View } from "react-native";
+import { RefreshControl, ScrollView, type TextInputInstance, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EmptyState } from "@/components/EmptyState";
@@ -10,14 +10,17 @@ import { EMPTY_FILTERS, FilterSheet, type Filters } from "@/components/FilterShe
 import { ProductCard } from "@/components/ProductCard";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { SearchBar } from "@/components/SearchBar";
+import { ProductCardSkeleton } from "@/components/Skeleton";
 import { TAB_BAR_SPACE } from "@/components/TabBar";
 import { Chip, PressableScale, Text } from "@/components/ui";
-import { getBudgetBand, OCCASION_META } from "@/data/catalog";
+import { getBudgetBand, occasionMeta } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { useListToggle } from "@/hooks/useListToggle";
 import { useProducts } from "@/hooks/useProducts";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { activeFilterCount, filterProducts } from "@/lib/filter";
 import { toggleIn } from "@/lib/items";
-import { type BudgetBandId, CATEGORIES, type Category, type Occasion, type Product } from "@/types";
+import type { BudgetBandId, Category, Occasion, Product } from "@/types";
 
 type Params = {
   category?: Category;
@@ -29,7 +32,9 @@ type Params = {
 
 export default function Catalogue() {
   const params = useLocalSearchParams<Params>();
-  const { products, loading } = useProducts();
+  const { products, loading, error, retry } = useProducts();
+  const { refreshing, onRefresh } = usePullToRefresh();
+  const { categories } = useLists();
   const { inList, toggle, openProduct } = useListToggle();
 
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
@@ -99,7 +104,7 @@ export default function Catalogue() {
   );
 
   const activePills = [
-    filters.occasion && { key: "occasion" as const, label: OCCASION_META[filters.occasion].short },
+    filters.occasion && { key: "occasion" as const, label: occasionMeta(filters.occasion).short },
     filters.budget && { key: "budget" as const, label: getBudgetBand(filters.budget)?.label ?? "" },
   ].filter(Boolean) as { key: "occasion" | "budget"; label: string }[];
 
@@ -126,7 +131,7 @@ export default function Catalogue() {
           }}
         >
           <Chip label="All" selected={!filters.categories.length} onPress={() => setCategory(null)} />
-          {CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <Chip
               key={c}
               label={c}
@@ -157,9 +162,22 @@ export default function Catalogue() {
       </View>
 
       {loading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#121212" />
+        <View className="gap-3 px-5">
+          {[0, 1, 2].map((row) => (
+            <View key={row} className="flex-row gap-3">
+              <ProductCardSkeleton />
+              <ProductCardSkeleton />
+            </View>
+          ))}
         </View>
+      ) : error && !products.length ? (
+        <EmptyState
+          icon={WifiOff}
+          title="Couldn't load the catalogue"
+          body={error}
+          actionLabel="Try again"
+          onAction={retry}
+        />
       ) : (
         <FlashList
           data={results}
@@ -170,6 +188,9 @@ export default function Catalogue() {
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: TAB_BAR_SPACE }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#121212" />
+          }
           ListEmptyComponent={
             <EmptyState
               icon={PackageSearch}

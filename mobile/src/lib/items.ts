@@ -1,4 +1,4 @@
-import { CUSTOMISATIONS, type Customisation, type EnquiryItem, type Product, type VariantQty } from "@/types";
+import type { Customisation, EnquiryItem, Product, VariantQty } from "@/types";
 
 // Every gift can be ordered from 10 units
 export const MIN_ORDER = 10;
@@ -73,6 +73,7 @@ export const toEnquiryItem = (product: Product, choice: Choice): EnquiryItem => 
   customisations: cleanCustomisations(product, choice.customisations),
 });
 
-// The enquiry-level list the brief asks for: every customisation across the gifts
-export const allCustomisations = (items: EnquiryItem[]) =>
-  CUSTOMISATIONS.filter((c) => items.some((i) => i.customisations?.includes(c)));
+// The enquiry-level list the brief asks for: every customisation across the gifts, once each
+export const allCustomisations = (items: EnquiryItem[]) => [
+  ...new Set(items.flatMap((i) => i.customisations ?? [])),
+];

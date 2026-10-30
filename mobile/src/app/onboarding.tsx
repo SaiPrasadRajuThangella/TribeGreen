@@ -1,12 +1,13 @@
 import { router } from "expo-router";
 import { ArrowRight } from "lucide-react-native";
 import { View } from "react-native";
-import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProductImage } from "@/components/ProductImage";
 import { Button, Text } from "@/components/ui";
 import { BANNER_IMAGES } from "@/data/catalog";
+import { AnimatedView } from "@/lib/interop";
 import { usePrefs } from "@/store";
 
 export default function Onboarding() {
@@ -26,7 +27,7 @@ export default function Onboarding() {
 
   return (
     <View className="flex-1 bg-canvas">
-      <Animated.View
+      <AnimatedView
         entering={FadeInUp.duration(600)}
         className="flex-1 overflow-hidden rounded-b-[40px] bg-lime"
       >
@@ -39,9 +40,9 @@ export default function Onboarding() {
             🌿 Tribe Green
           </Text>
         </View>
-      </Animated.View>
+      </AnimatedView>
 
-      <Animated.View
+      <AnimatedView
         entering={FadeInDown.delay(150).duration(600)}
         className="px-6 pt-8"
         style={{ paddingBottom: Math.max(insets.bottom, 16) + 12 }}
@@ -66,7 +67,7 @@ export default function Onboarding() {
           onPress={signUp}
         />
         <Button label="Browse first" variant="ghost" size="md" className="mt-3" onPress={start} />
-      </Animated.View>
+      </AnimatedView>
     </View>
   );
 }

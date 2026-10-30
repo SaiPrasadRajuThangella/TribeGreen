@@ -2,7 +2,7 @@ import { Check, Pencil, X } from "lucide-react-native";
 import { memo, useState } from "react";
 import { TextInput, View } from "react-native";
 
-import { CUSTOMISATION_META, formatINR } from "@/data/catalog";
+import { customisationMeta, formatINR } from "@/data/catalog";
 import { useProducts } from "@/hooks/useProducts";
 import { changeCallbackNumber } from "@/lib/api";
 import { describeVariants } from "@/lib/items";
@@ -71,7 +71,7 @@ export const CustomisationTags = memo(function CustomisationTags({ item }: { ite
   return (
     <View className="mt-1.5 flex-row flex-wrap gap-1">
       {item.customisations.map((c) => {
-        const { icon: Icon, short } = CUSTOMISATION_META[c];
+        const { icon: Icon, short } = customisationMeta(c);
         return (
           <View key={c} className="flex-row items-center gap-1 rounded-full bg-lime-soft px-2 py-0.5">
             <Icon size={10} color="#3A5512" strokeWidth={2.2} />

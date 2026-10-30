@@ -1,13 +1,13 @@
 import { X } from "lucide-react-native";
 import { memo, useState } from "react";
-import { Modal, Pressable, ScrollView, View } from "react-native";
-import Animated, { SlideInDown } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ScrollView, View } from "react-native";
 
-import { BUDGET_BANDS, OCCASION_META } from "@/data/catalog";
+import { BUDGET_BANDS, occasionMeta } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { toggleIn } from "@/lib/items";
-import { type BudgetBandId, CATEGORIES, type Category, type Occasion, OCCASIONS } from "@/types";
+import type { BudgetBandId, Category, Occasion } from "@/types";
 
+import { BottomSheet } from "./BottomSheet";
 import { Button, Chip, IconButton, Text } from "./ui";
 
 export type Filters = {
@@ -34,25 +34,16 @@ export const FilterSheet = memo(function FilterSheet({
   onClose,
 }: Props) {
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      navigationBarTranslucent
-      onRequestClose={onClose}
-    >
+    <BottomSheet visible={visible} onClose={onClose} closeLabel="Close filters">
       {/* Mounted on each opening, so the draft starts from the filters currently applied */}
-      {visible ? (
-        <SheetBody value={value} resultCount={resultCount} onApply={onApply} onClose={onClose} />
-      ) : null}
-    </Modal>
+      <SheetBody value={value} resultCount={resultCount} onApply={onApply} onClose={onClose} />
+    </BottomSheet>
   );
 });
 
 function SheetBody({ value, resultCount, onApply, onClose }: Omit<Props, "visible">) {
-  const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<Filters>(value);
+  const { categories, occasions } = useLists();
 
   const toggle = <K extends "occasion" | "budget">(key: K, v: Filters[K]) =>
     setDraft((d) => ({ ...d, [key]: d[key] === v ? null : v }));
@@ -62,78 +53,63 @@ function SheetBody({ value, resultCount, onApply, onClose }: Omit<Props, "visibl
   const count = resultCount(draft);
 
   return (
-    <View className="flex-1 justify-end bg-black/40">
-      <Pressable className="flex-1" onPress={onClose} accessibilityLabel="Close filters" />
-      <Animated.View
-        entering={SlideInDown.springify().damping(22).stiffness(200)}
-        className="max-h-[85%] rounded-t-[32px] bg-canvas"
-        style={{ paddingBottom: Math.max(insets.bottom, 16) }}
-      >
-        <View className="items-center pt-3">
-          <View className="h-1.5 w-10 rounded-full bg-line" />
-        </View>
-        <View className="flex-row items-center justify-between px-5 pb-2 pt-3">
-          <Text weight="bold" className="text-xl">
-            Filters
-          </Text>
-          <IconButton icon={X} label="Close filters" onPress={onClose} size={38} />
-        </View>
+    <>
+      <View className="flex-row items-center justify-between px-5 pb-2 pt-3">
+        <Text weight="bold" className="text-xl">
+          Filters
+        </Text>
+        <IconButton icon={X} label="Close filters" onPress={onClose} size={38} />
+      </View>
 
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}>
-          <Group title="Category · pick one or more">
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+        <Group title="Category · pick one or more">
+          <Chip
+            label="All"
+            selected={!draft.categories.length}
+            onPress={() => setDraft((d) => ({ ...d, categories: [] }))}
+          />
+          {categories.map((c) => (
             <Chip
-              label="All"
-              selected={!draft.categories.length}
-              onPress={() => setDraft((d) => ({ ...d, categories: [] }))}
+              key={c}
+              label={c}
+              selected={draft.categories.includes(c)}
+              onPress={() => toggleCategory(c)}
             />
-            {CATEGORIES.map((c) => (
-              <Chip
-                key={c}
-                label={c}
-                selected={draft.categories.includes(c)}
-                onPress={() => toggleCategory(c)}
-              />
-            ))}
-          </Group>
-          <Group title="Occasion">
-            {OCCASIONS.map((o) => (
-              <Chip
-                key={o}
-                label={OCCASION_META[o].short}
-                icon={OCCASION_META[o].icon}
-                selected={draft.occasion === o}
-                onPress={() => toggle("occasion", o)}
-              />
-            ))}
-          </Group>
-          <Group title="Budget per unit">
-            {BUDGET_BANDS.map((b) => (
-              <Chip
-                key={b.id}
-                label={b.label}
-                selected={draft.budget === b.id}
-                onPress={() => toggle("budget", b.id)}
-              />
-            ))}
-          </Group>
-        </ScrollView>
+          ))}
+        </Group>
+        <Group title="Occasion">
+          {occasions.map((o) => (
+            <Chip
+              key={o}
+              label={occasionMeta(o).short}
+              icon={occasionMeta(o).icon}
+              selected={draft.occasion === o}
+              onPress={() => toggle("occasion", o)}
+            />
+          ))}
+        </Group>
+        <Group title="Budget per unit">
+          {BUDGET_BANDS.map((b) => (
+            <Chip
+              key={b.id}
+              label={b.label}
+              selected={draft.budget === b.id}
+              onPress={() => toggle("budget", b.id)}
+            />
+          ))}
+        </Group>
+      </ScrollView>
 
-        <View className="flex-row gap-3 px-5 pt-3">
-          <Button
-            label="Reset"
-            variant="outline"
-            className="flex-1"
-            onPress={() => setDraft(EMPTY_FILTERS)}
-          />
-          <Button
-            label={count === 1 ? "Show 1 gift" : `Show ${count} gifts`}
-            variant="dark"
-            className="flex-[2]"
-            onPress={() => onApply(draft)}
-          />
-        </View>
-      </Animated.View>
-    </View>
+      <View className="flex-row gap-3 px-5 pt-3">
+        <Button label="Reset" variant="outline" className="flex-1" onPress={() => setDraft(EMPTY_FILTERS)} />
+        <Button
+          label={count === 1 ? "Show 1 gift" : `Show ${count} gifts`}
+          variant="dark"
+          className="flex-1"
+          onPress={() => onApply(draft)}
+        />
+      </View>
+    </>
   );
 }
 

@@ -1,32 +1,27 @@
 import { router } from "expo-router";
-import {
-  ArrowRight,
-  CalendarDays,
-  ChevronRight,
-  Clock,
-  LogOut,
-  PackageSearch,
-  UserRound,
-} from "lucide-react-native";
+import { ArrowRight, CalendarDays, ChevronRight, Clock, PackageSearch, UserRound } from "lucide-react-native";
 import { memo, useMemo } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import { RefreshControl, ScrollView, View } from "react-native";
+import { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EmptyState } from "@/components/EmptyState";
 import { Badge, CallbackNumber, ItemList, Progress } from "@/components/orders";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { Skeleton } from "@/components/Skeleton";
 import { TAB_BAR_SPACE } from "@/components/TabBar";
 import { PressableScale, Text } from "@/components/ui";
-import { formatINR, OCCASION_META } from "@/data/catalog";
+import { formatINR, occasionMeta } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { useNow } from "@/hooks/useNow";
 import { useOrdersFeed } from "@/hooks/useOrdersFeed";
 import { REPLY_WITHIN_HOURS } from "@/lib/config";
+import { AnimatedView } from "@/lib/interop";
 import { enquiryEstimate } from "@/lib/items";
 import { customerStatus } from "@/lib/orderStatus";
 import { daysUntil, formatDate, formatDay, formatTime, relativeDays, replyWindow } from "@/lib/time";
 import { isSignedIn, useCustomer } from "@/store";
-import { type Enquiry, ORDER_STAGES } from "@/types";
+import type { Enquiry } from "@/types";
 
 const QUOTE_STEPS = ["Enquiry sent", "Quote call", "Order confirmed", "Delivered"];
 
@@ -35,7 +30,6 @@ const openOrder = (id: string) => router.push({ pathname: "/order/[id]", params:
 export default function Orders() {
   const signedIn = useCustomer(isSignedIn);
   const user = useCustomer((s) => s.user);
-  const signOut = useCustomer((s) => s.signOut);
   const { enquiries, loading, error, refreshing, refresh } = useOrdersFeed(signedIn);
   const now = useNow();
 
@@ -72,29 +66,10 @@ export default function Orders() {
 
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-canvas">
-      <ScreenHeader
-        title="My orders"
-        subtitle={user ? `${user.name} · ${user.company}` : undefined}
-        right={
-          <PressableScale
-            haptic
-            hitSlop={8}
-            onPress={signOut}
-            accessibilityLabel="Sign out"
-            className="flex-row items-center gap-1.5 rounded-full bg-card px-3 py-2"
-          >
-            <LogOut size={14} color="#2B2B2B" />
-            <Text weight="semibold" className="text-[12px]">
-              Sign out
-            </Text>
-          </PressableScale>
-        }
-      />
+      <ScreenHeader title="My orders" subtitle={user ? `${user.name} · ${user.company}` : undefined} />
 
       {loading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#121212" />
-        </View>
+        <OrdersSkeleton />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -143,6 +118,32 @@ export default function Orders() {
         </ScrollView>
       )}
     </SafeAreaView>
+  );
+}
+
+// Card-shaped placeholders while the first load of orders is on its way
+function OrdersSkeleton() {
+  return (
+    <View className="gap-4 px-5 pt-1">
+      <Skeleton width={120} height={16} radius={8} />
+      {[0, 1, 2].map((i) => (
+        <View key={i} className="gap-3 rounded-[26px] bg-card p-4">
+          <View className="flex-row items-center justify-between">
+            <Skeleton width="45%" height={14} radius={7} />
+            <Skeleton width={84} height={24} radius={12} />
+          </View>
+          <Skeleton width="65%" height={12} radius={6} />
+          <Skeleton width="100%" height={8} radius={4} />
+          <View className="flex-row gap-3">
+            <Skeleton width={44} height={44} radius={12} />
+            <View className="flex-1 gap-2 pt-1">
+              <Skeleton width="70%" height={12} radius={6} />
+              <Skeleton width="40%" height={10} radius={5} />
+            </View>
+          </View>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -202,29 +203,26 @@ function SeeEverything({ id }: { id: string }) {
 }
 
 const OrderCard = memo(function OrderCard({ enquiry: e, now }: { enquiry: Enquiry; now: number }) {
+  const { orderStages } = useLists();
   const order = e.order;
   if (!order) {
     return (
-      <Animated.View entering={FadeInDown.duration(300)} className="overflow-hidden rounded-[26px] bg-card">
-        <CardHeader
-          enquiry={e}
-          label="Order"
-          meta={`${OCCASION_META[e.occasion].short} · ${e.units} units`}
-        />
+      <AnimatedView entering={FadeInDown.duration(300)} className="overflow-hidden rounded-[26px] bg-card">
+        <CardHeader enquiry={e} label="Order" meta={`${occasionMeta(e.occasion).short} · ${e.units} units`} />
         <Text tone="limeInk" className="mx-4 mb-2 rounded-2xl bg-lime-soft p-3 text-[13px]">
           Your order is confirmed. The final invoice and delivery date will appear here shortly.
         </Text>
         <SeeEverything id={e.id} />
-      </Animated.View>
+      </AnimatedView>
     );
   }
   const days = daysUntil(order.expectedDelivery, now);
   return (
-    <Animated.View entering={FadeInDown.duration(300)} className="overflow-hidden rounded-[26px] bg-card">
+    <AnimatedView entering={FadeInDown.duration(300)} className="overflow-hidden rounded-[26px] bg-card">
       <CardHeader
         enquiry={e}
         label="Order"
-        meta={`Confirmed ${formatDate(order.confirmedAt)} · ${OCCASION_META[e.occasion].short}`}
+        meta={`Confirmed ${formatDate(order.confirmedAt)} · ${occasionMeta(e.occasion).short}`}
       />
       <View className="mx-4 rounded-[20px] bg-ink p-4">
         <Text tone="white" className="text-[11px] opacity-60">
@@ -246,7 +244,7 @@ const OrderCard = memo(function OrderCard({ enquiry: e, now }: { enquiry: Enquir
             {order.trackingNumber}
           </Text>
         </Text>
-        <Progress steps={ORDER_STAGES} current={ORDER_STAGES.indexOf(order.stage)} dark />
+        <Progress steps={orderStages} current={orderStages.indexOf(order.stage)} dark />
       </View>
       <View className="px-4">
         <ItemList items={order.items} />
@@ -270,7 +268,7 @@ const OrderCard = memo(function OrderCard({ enquiry: e, now }: { enquiry: Enquir
         </View>
       ) : null}
       <SeeEverything id={e.id} />
-    </Animated.View>
+    </AnimatedView>
   );
 });
 
@@ -279,7 +277,7 @@ const QuoteCard = memo(function QuoteCard({ enquiry: e, now }: { enquiry: Enquir
   const reply = replyWindow(e.respondBy, now);
   const estimate = enquiryEstimate(e.products);
   return (
-    <Animated.View entering={FadeInDown.duration(300)} className="overflow-hidden rounded-[26px] bg-card">
+    <AnimatedView entering={FadeInDown.duration(300)} className="overflow-hidden rounded-[26px] bg-card">
       <CardHeader
         enquiry={e}
         label="Enquiry"
@@ -334,7 +332,7 @@ const QuoteCard = memo(function QuoteCard({ enquiry: e, now }: { enquiry: Enquir
         ) : null}
       </View>
       <SeeEverything id={e.id} />
-    </Animated.View>
+    </AnimatedView>
   );
 });
 

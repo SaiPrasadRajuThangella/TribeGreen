@@ -4,7 +4,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { type Choice, toggleIn } from "@/lib/items";
 import type { EnquiryFormValues } from "@/lib/validation";
-import type { Customer, Customisation, Enquiry } from "@/types";
+import type { Customer, Customisation, Enquiry, Lists, Product } from "@/types";
 
 const storage = createJSONStorage(() => AsyncStorage);
 
@@ -141,6 +141,25 @@ export const useMyOrders = create<MyOrdersState>()((set) => ({
   setError: (error) => set({ error }),
   reset: () => set({ enquiries: null, error: null }),
 }));
+
+/* ---------- What the API serves everyone: the catalogue and the name lists ---------- */
+
+export type Remote = "products" | "lists";
+
+// The last copy stays on the device, so screens fill in at once while a fresh copy loads
+type ApiCacheState = {
+  products: Product[] | null;
+  lists: Lists | null;
+  errors: Partial<Record<Remote, string>>;
+};
+
+export const useApiCache = create<ApiCacheState>()(
+  persist((): ApiCacheState => ({ products: null, lists: null, errors: {} }), {
+    name: "tg-api-cache",
+    storage,
+    partialize: (s) => ({ products: s.products, lists: s.lists }),
+  }),
+);
 
 /* ---------- App preferences ---------- */
 

@@ -32,7 +32,7 @@ export const SearchBar = memo(
         className="h-12 flex-1 flex-row items-center gap-2.5 rounded-2xl bg-card px-4"
       >
         <Search size={18} color="#73776E" />
-        <Text tone="faint" className="text-sm">
+        <Text tone="faint" numberOfLines={1} className="flex-1 text-sm">
           {placeholder}
         </Text>
       </PressableScale>
@@ -65,14 +65,16 @@ export const SearchBar = memo(
         {field}
         {onFilterPress ? (
           <View>
-            <IconButton
-              icon={SlidersHorizontal}
-              label="Filters"
-              size={48}
-              variant="dark"
+            <PressableScale
+              haptic
+              hitSlop={6}
               onPress={onFilterPress}
-              className="rounded-2xl"
-            />
+              accessibilityRole="button"
+              accessibilityLabel={filterCount ? `Filters, ${filterCount} applied` : "Filters"}
+              className="h-12 w-12 items-center justify-center rounded-2xl bg-ink"
+            >
+              <SlidersHorizontal size={20} color="#FFFFFF" strokeWidth={2} />
+            </PressableScale>
             {filterCount > 0 ? (
               <View className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full bg-lime px-1">
                 <Text weight="bold" className="text-[11px]">

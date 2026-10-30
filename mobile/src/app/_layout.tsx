@@ -18,6 +18,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { RemoveGiftDialog } from "@/components/GiftRow";
 import { ItemSheet } from "@/components/ItemSheet";
+import { PortalHost } from "@/components/Portal";
 import { useCustomer, usePrefs } from "@/store";
 
 SplashScreen.preventAutoHideAsync();
@@ -61,6 +62,8 @@ export default function RootLayout() {
         {/* Shared by every screen: the size / customisation picker and "Remove this gift?" */}
         <ItemSheet />
         <RemoveGiftDialog />
+        {/* Bottom sheets draw here, above every screen and the tab bar */}
+        <PortalHost />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

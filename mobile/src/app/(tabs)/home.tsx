@@ -1,7 +1,7 @@
 import { router } from "expo-router";
-import { ArrowUpRight, Gift, MessageCircle } from "lucide-react-native";
+import { ArrowUpRight, Gift, type LucideIcon } from "lucide-react-native";
 import { memo, useCallback, useMemo } from "react";
-import { ScrollView, useWindowDimensions, View } from "react-native";
+import { RefreshControl, ScrollView, useWindowDimensions, View } from "react-native";
 import Animated, {
   FadeInDown,
   interpolate,
@@ -12,18 +12,22 @@ import Animated, {
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Avatar } from "@/components/Avatar";
 import { ProductCard } from "@/components/ProductCard";
 import { ProductImage } from "@/components/ProductImage";
 import { SearchBar } from "@/components/SearchBar";
 import { SectionHeader } from "@/components/SectionHeader";
+import { ProductCardSkeleton, Skeleton } from "@/components/Skeleton";
 import { TAB_BAR_SPACE } from "@/components/TabBar";
-import { IconButton, PressableScale, Text } from "@/components/ui";
-import { BANNER_IMAGES, CATEGORY_META, OCCASION_META } from "@/data/catalog";
+import { PressableScale, Text } from "@/components/ui";
+import { BANNER_IMAGES, categoryMeta, occasionMeta } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { useListToggle } from "@/hooks/useListToggle";
 import { useProducts } from "@/hooks/useProducts";
-import { openWhatsApp } from "@/lib/whatsapp";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { AnimatedView } from "@/lib/interop";
 import { isSignedIn, useCustomer } from "@/store";
-import { CATEGORIES, type Occasion, OCCASIONS } from "@/types";
+import type { Occasion } from "@/types";
 
 type Banner = {
   id: string;
@@ -61,7 +65,12 @@ const GAP = 12;
 export default function Home() {
   const { width } = useWindowDimensions();
   const bannerWidth = width - 40;
-  const { products } = useProducts();
+  const categoryWidth = (width - 40) / 4;
+  // Narrower than a category so the fifth occasion peeks in and the row reads as scrollable
+  const occasionWidth = (width - 40) / 4.4;
+  const { products, loading } = useProducts();
+  const { categories, occasions, ready: listsReady } = useLists();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const { inList, toggle, openProduct } = useListToggle();
   const scrollX = useSharedValue(0);
 
@@ -84,6 +93,7 @@ export default function Home() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: TAB_BAR_SPACE }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#121212" />}
       >
         {/* Header */}
         <View className="flex-row items-center justify-between px-5 pb-4 pt-2">
@@ -100,21 +110,14 @@ export default function Home() {
               </Text>
             </View>
           </View>
-          <View className="flex-row items-center gap-2">
-            <IconButton
-              icon={MessageCircle}
-              label="Chat with us on WhatsApp"
-              onPress={() => openWhatsApp("Hi Tribe Green! I'd like help choosing corporate gifts.")}
-            />
-            <AccountButton />
-          </View>
+          <AccountButton />
         </View>
 
-        <Animated.View entering={FadeInDown.duration(500)} className="px-5 pb-5">
+        <AnimatedView entering={FadeInDown.duration(500)} className="px-5 pb-5">
           <Text weight="extrabold" className="text-[28px] leading-[36px]">
             Gifts your team{"\n"}will actually love.
           </Text>
-        </Animated.View>
+        </AnimatedView>
 
         <SearchBar
           onPress={() => goCatalogue({ focus: "1" })}
@@ -151,28 +154,19 @@ export default function Home() {
         <View className="mt-7">
           <SectionHeader title="Shop by category" onAction={() => goCatalogue()} />
           <View className="flex-row justify-between px-5">
-            {CATEGORIES.map((c) => {
-              const { icon: Icon, tint } = CATEGORY_META[c];
-              return (
-                <PressableScale
-                  key={c}
-                  haptic
-                  onPress={() => goCatalogue({ category: c })}
-                  className="items-center"
-                  style={{ width: (width - 40) / 4 }}
-                >
-                  <View
-                    className="mb-2 h-16 w-16 items-center justify-center rounded-full"
-                    style={{ backgroundColor: tint }}
-                  >
-                    <Icon size={24} color="#121212" strokeWidth={1.8} />
-                  </View>
-                  <Text weight="medium" numberOfLines={1} className="text-[12px]">
-                    {c === "Work Essentials" ? "Work" : c}
-                  </Text>
-                </PressableScale>
-              );
-            })}
+            {listsReady
+              ? null
+              : [0, 1, 2, 3].map((i) => <CircleTileSkeleton key={i} width={categoryWidth} />)}
+            {categories.map((c) => (
+              <CircleTile
+                key={c}
+                icon={categoryMeta(c).icon}
+                tint={categoryMeta(c).tint}
+                label={c === "Work Essentials" ? "Work" : c}
+                width={categoryWidth}
+                onPress={() => goCatalogue({ category: c })}
+              />
+            ))}
           </View>
         </View>
 
@@ -184,6 +178,7 @@ export default function Home() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 20, gap: GAP }}
           >
+            {loading ? [0, 1, 2].map((i) => <ProductCardSkeleton key={i} width={172} />) : null}
             {bestsellers.map((p) => (
               <ProductCard
                 key={p.id}
@@ -197,30 +192,28 @@ export default function Home() {
           </ScrollView>
         </View>
 
-        {/* Occasions */}
+        {/* Occasions: same round tiles as categories, in a scrolling row */}
         <View className="mt-7">
           <SectionHeader title="Gift by occasion" />
-          <View className="flex-row flex-wrap px-5" style={{ gap: GAP }}>
-            {OCCASIONS.map((o) => {
-              const { icon: Icon, short } = OCCASION_META[o];
-              return (
-                <PressableScale
-                  key={o}
-                  haptic
-                  onPress={() => goCatalogue({ occasion: o })}
-                  className="flex-row items-center gap-3 rounded-[22px] bg-card p-3"
-                  style={{ width: (width - 40 - GAP) / 2 }}
-                >
-                  <View className="h-10 w-10 items-center justify-center rounded-full bg-lime-soft">
-                    <Icon size={18} color="#3A5512" strokeWidth={2} />
-                  </View>
-                  <Text weight="semibold" numberOfLines={1} className="flex-1 text-[13px]">
-                    {short}
-                  </Text>
-                </PressableScale>
-              );
-            })}
-          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 20 }}
+          >
+            {listsReady
+              ? null
+              : [0, 1, 2, 3, 4].map((i) => <CircleTileSkeleton key={i} width={occasionWidth} />)}
+            {occasions.map((o) => (
+              <CircleTile
+                key={o}
+                icon={occasionMeta(o).icon}
+                tint={occasionMeta(o).tint}
+                label={occasionMeta(o).short}
+                width={occasionWidth}
+                onPress={() => goCatalogue({ occasion: o })}
+              />
+            ))}
+          </ScrollView>
         </View>
 
         {/* Trust strip */}
@@ -268,6 +261,51 @@ export default function Home() {
   );
 }
 
+// Placeholder for a round tile while the names load (first launch only; later ones are saved)
+function CircleTileSkeleton({ width }: { width: number }) {
+  return (
+    <View className="items-center gap-2" style={{ width }}>
+      <Skeleton width={64} height={64} radius={32} />
+      <Skeleton width={48} height={10} radius={5} />
+    </View>
+  );
+}
+
+// Round icon with a label underneath: the "Shop by category" and "Gift by occasion" tiles
+const CircleTile = memo(function CircleTile({
+  icon: Icon,
+  tint,
+  label,
+  width,
+  onPress,
+}: {
+  icon: LucideIcon;
+  tint: string;
+  label: string;
+  width: number;
+  onPress: () => void;
+}) {
+  return (
+    <PressableScale
+      haptic
+      onPress={onPress}
+      accessibilityRole="button"
+      className="items-center"
+      style={{ width }}
+    >
+      <View
+        className="mb-2 h-16 w-16 items-center justify-center rounded-full"
+        style={{ backgroundColor: tint }}
+      >
+        <Icon size={24} color="#121212" strokeWidth={1.8} />
+      </View>
+      <Text weight="medium" numberOfLines={1} className="text-[12px]">
+        {label}
+      </Text>
+    </PressableScale>
+  );
+});
+
 const BannerCard = memo(function BannerCard({
   banner,
   width,
@@ -310,10 +348,10 @@ const Dot = memo(function Dot({ index, progress }: { index: number; progress: Sh
     const t = interpolate(progress.value, [index - 1, index, index + 1], [0, 1, 0], "clamp");
     return { width: 6 + t * 16, opacity: 0.35 + t * 0.65 };
   });
-  return <Animated.View style={style} className="h-1.5 rounded-full bg-ink" />;
+  return <AnimatedView animatedStyle={style} className="h-1.5 rounded-full bg-ink" />;
 });
 
-// The customer's initials (opens My orders), or Sign in
+// The customer's initials (opens their profile), or Sign in
 function AccountButton() {
   const user = useCustomer((s) => s.user);
   const signedIn = useCustomer(isSignedIn);
@@ -330,22 +368,13 @@ function AccountButton() {
       </PressableScale>
     );
   }
-  const initials = user.name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]!.toUpperCase())
-    .join("");
   return (
     <PressableScale
       haptic
-      onPress={() => router.navigate("/orders")}
-      accessibilityLabel={`My orders, signed in as ${user.name}`}
-      className="h-11 w-11 items-center justify-center rounded-full bg-ink"
+      onPress={() => router.push("/profile")}
+      accessibilityLabel={`Profile, signed in as ${user.name}`}
     >
-      <Text weight="bold" tone="lime" className="text-[14px]">
-        {initials}
-      </Text>
+      <Avatar name={user.name} />
     </PressableScale>
   );
 }

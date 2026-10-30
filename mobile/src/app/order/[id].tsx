@@ -1,28 +1,32 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { Check, MessageCircle, PackageSearch, X } from "lucide-react-native";
-import { ActivityIndicator, ScrollView, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import { ScrollView, View } from "react-native";
+import { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EmptyState } from "@/components/EmptyState";
 import { Badge, CallbackNumber, ItemList } from "@/components/orders";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { Skeleton } from "@/components/Skeleton";
 import { Button, Text } from "@/components/ui";
-import { CUSTOMISATION_META, formatINR } from "@/data/catalog";
+import { WhatsAppNotice } from "@/components/WhatsAppNotice";
+import { customisationMeta, formatINR } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { useNow } from "@/hooks/useNow";
 import { useOrdersFeed } from "@/hooks/useOrdersFeed";
+import { AnimatedView } from "@/lib/interop";
 import { enquiryEstimate } from "@/lib/items";
 import { customerStatus } from "@/lib/orderStatus";
 import { daysUntil, formatDate, formatDay, formatTime, relativeDays, replyWindow } from "@/lib/time";
-import { formatPhone } from "@/lib/validation";
+import { formatAddress, formatPhone } from "@/lib/validation";
 import { openWhatsApp } from "@/lib/whatsapp";
 import { isSignedIn, useCustomer } from "@/store";
-import { type Enquiry, ORDER_STAGES, type OrderStage } from "@/types";
+import type { Enquiry, OrderStage } from "@/types";
 
 type StepState = "done" | "current" | "upcoming" | "cancelled";
 type Step = { key: string; title: string; at?: string; state: StepState; lines: React.ReactNode[] };
 
-const STAGE_COPY: Record<OrderStage, { done: string; upcoming: string }> = {
+const STAGE_COPY: Record<OrderStage, { done: string; upcoming: string } | undefined> = {
   Confirmed: {
     done: "Your order is confirmed.",
     upcoming: "Confirm the quote with our team to place the order.",
@@ -36,7 +40,7 @@ const STAGE_COPY: Record<OrderStage, { done: string; upcoming: string }> = {
 };
 
 // Every phase of an enquiry, from "sent" to "delivered" (or "cancelled"), same as the website
-function buildSteps(e: Enquiry, now: number): Step[] {
+function buildSteps(e: Enquiry, now: number, stages: OrderStage[]): Step[] {
   const order = e.order;
   const called = !!(e.contactedAt || order || e.status === "Contacted" || e.status === "Converted");
   const reply = replyWindow(e.respondBy, now);
@@ -68,10 +72,10 @@ function buildSteps(e: Enquiry, now: number): Step[] {
     },
   ];
 
-  const reached = order ? ORDER_STAGES.indexOf(order.stage) : -1;
-  ORDER_STAGES.forEach((stage, i) => {
+  const reached = order ? stages.indexOf(order.stage) : -1;
+  stages.forEach((stage, i) => {
     const done = i <= reached;
-    const copy = STAGE_COPY[stage];
+    const copy = STAGE_COPY[stage] ?? { done: `${stage}.`, upcoming: `${stage} comes next.` };
     const lines: React.ReactNode[] = [done ? copy.done : copy.upcoming];
     if (order && done && stage === "Confirmed") {
       lines.push(`Order total ${formatINR(order.total)}`, `Tracking number ${order.trackingNumber}`);
@@ -121,12 +125,19 @@ export default function OrderDetail() {
   const signedIn = useCustomer(isSignedIn);
   const { enquiries, loading } = useOrdersFeed(signedIn);
   const now = useNow();
+  const { orderStages } = useLists();
   const e = enquiries.find((x) => x.id === id);
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-canvas">
-        <ActivityIndicator color="#121212" />
+      <SafeAreaView edges={["top"]} className="flex-1 bg-canvas">
+        <ScreenHeader back title={id ?? "Order"} />
+        <View className="gap-3.5 px-5">
+          <Skeleton width="60%" height={26} radius={8} />
+          <Skeleton width="100%" height={150} radius={24} />
+          <Skeleton width="100%" height={220} radius={24} />
+          <Skeleton width="100%" height={120} radius={24} />
+        </View>
       </SafeAreaView>
     );
   }
@@ -148,7 +159,7 @@ export default function OrderDetail() {
 
   const order = e.order;
   const status = customerStatus(e);
-  const steps = buildSteps(e, now);
+  const steps = buildSteps(e, now, orderStages);
   const days = order ? daysUntil(order.expectedDelivery, now) : 0;
 
   return (
@@ -196,7 +207,7 @@ export default function OrderDetail() {
           </View>
         ) : null}
 
-        <Animated.View entering={FadeInDown.duration(300)} className="rounded-[24px] bg-card p-5">
+        <AnimatedView entering={FadeInDown.duration(300)} className="rounded-[24px] bg-card p-5">
           <Text weight="bold" className="mb-5 text-[16px]">
             Every step
           </Text>
@@ -249,7 +260,10 @@ export default function OrderDetail() {
               </View>
             </View>
           ))}
-        </Animated.View>
+        </AnimatedView>
+
+        {/* Until the order is placed, say how it gets confirmed and paid */}
+        {!order && e.status !== "Lost" ? <WhatsAppNotice sent /> : null}
 
         <View className="rounded-[24px] bg-card px-5 pt-4">
           <Text weight="bold" className="text-[16px]">
@@ -269,12 +283,13 @@ export default function OrderDetail() {
         <View className="rounded-[24px] bg-card px-5 py-2">
           <Row label="Occasion" value={e.occasion} />
           <Row label="Needed by" value={formatDay(e.deliveryDate)} />
+          {e.address ? <Row label="Deliver to" value={formatAddress(e.address)} /> : null}
           <Row label="Units" value={e.units.toLocaleString("en-IN")} />
           <Row
             label="Customisation"
             value={
               e.customisations.length
-                ? e.customisations.map((c) => CUSTOMISATION_META[c].short).join(", ")
+                ? e.customisations.map((c) => customisationMeta(c).short).join(", ")
                 : "None"
             }
           />

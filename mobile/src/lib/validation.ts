@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { CUSTOMISATIONS, OCCASIONS } from "@/types";
+import type { Address } from "@/types";
 
 import { MIN_ORDER } from "./items";
 
@@ -17,6 +17,9 @@ export function formatPhone(value: string) {
   return digits.length === 10 ? `+91 ${digits.slice(0, 5)} ${digits.slice(5)}` : value;
 }
 
+// "12 MG Road, Bengaluru, Karnataka 560001"
+export const formatAddress = (a: Address) => `${a.line}, ${a.city}, ${a.state} ${a.pincode}`;
+
 const variantSchema = z.object({ label: z.string().min(1), units: z.number().int().min(1) });
 
 // Each gift needs 10+ units; for sizes / colours the split has to add up to the total
@@ -26,36 +29,53 @@ const itemSchema = z
     name: z.string().min(1),
     units: z.number().int().min(MIN_ORDER, `Each gift needs at least ${MIN_ORDER} units`),
     variants: z.array(variantSchema).optional(),
-    customisations: z.array(z.enum(CUSTOMISATIONS)).optional(),
+    customisations: z.array(z.string()).optional(),
   })
   .refine(
     (item) => !item.variants || item.variants.reduce((sum, v) => sum + v.units, 0) === item.units,
     "Size quantities don't add up to the total",
   );
 
-// Same rules and messages as the website and the API
-export const enquirySchema = z.object({
-  name: z.string().trim().min(2, "Enter your full name"),
-  company: z.string().trim().min(2, "Enter your company name"),
-  phone: z
-    .string()
-    .transform(normalisePhone)
-    .refine((v) => PHONE_RE.test(v), "Enter a valid 10-digit mobile number"),
-  email: z.string().trim().toLowerCase().pipe(z.email("Enter a valid email address")),
-  occasion: z.enum(OCCASIONS, "Pick an occasion"),
-  units: z.coerce
-    .number("Enter the number of units")
-    .int("Units must be a whole number")
-    .min(MIN_ORDER, `Minimum order is ${MIN_ORDER} units`)
-    .max(100000, "For orders above 1,00,000 units, chat with us"),
-  deliveryDate: z
-    .string("Pick a delivery date")
-    .min(1, "Pick a delivery date")
-    .refine((v) => new Date(v).getTime() > Date.now(), "Delivery date must be in the future"),
-  products: z.array(itemSchema).min(1, "Add at least one gift"),
-  customisations: z.array(z.enum(CUSTOMISATIONS)),
-  message: z.string().trim().max(500, "Keep the message under 500 characters"),
-});
+// Same rules and messages as the website and the API. The address is typed in four fields and
+// sent as one `address` object
+export const enquirySchema = z
+  .object({
+    name: z.string().trim().min(2, "Enter your full name"),
+    company: z.string().trim().min(2, "Enter your company name"),
+    phone: z
+      .string()
+      .transform(normalisePhone)
+      .refine((v) => PHONE_RE.test(v), "Enter a valid 10-digit mobile number"),
+    email: z.string().trim().toLowerCase().pipe(z.email("Enter a valid email address")),
+    occasion: z.string("Pick an occasion").min(1, "Pick an occasion"),
+    units: z.coerce
+      .number("Enter the number of units")
+      .int("Units must be a whole number")
+      .min(MIN_ORDER, `Minimum order is ${MIN_ORDER} units`)
+      .max(100000, "For orders above 1,00,000 units, chat with us"),
+    deliveryDate: z
+      .string("Pick a delivery date")
+      .min(1, "Pick a delivery date")
+      .refine((v) => new Date(v).getTime() > Date.now(), "Delivery date must be in the future"),
+    addressLine: z
+      .string("Enter the full delivery address")
+      .trim()
+      .min(5, "Enter the full delivery address")
+      .max(200, "Keep the address under 200 characters"),
+    city: z.string("Enter the city").trim().min(2, "Enter the city").max(60),
+    state: z.string("Enter the state").trim().min(2, "Enter the state").max(60),
+    pincode: z
+      .string("Enter the 6-digit PIN code")
+      .trim()
+      .regex(/^[1-9]\d{5}$/, "Enter a valid 6-digit PIN code"),
+    products: z.array(itemSchema).min(1, "Add at least one gift"),
+    customisations: z.array(z.string()),
+    message: z.string().trim().max(500, "Keep the message under 500 characters"),
+  })
+  .transform(({ addressLine, city, state, pincode, ...rest }) => ({
+    ...rest,
+    address: { line: addressLine, city, state, pincode },
+  }));
 
 export type EnquiryFormValues = z.input<typeof enquirySchema>;
 export type EnquiryFormErrors = Partial<Record<keyof EnquiryFormValues, string>>;

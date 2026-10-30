@@ -12,28 +12,23 @@ import {
   Share2,
   ShoppingBag,
 } from "lucide-react-native";
-import { memo, useMemo, useState } from "react";
-import { ScrollView, Share, useWindowDimensions, View } from "react-native";
-import Animated, {
-  Extrapolation,
-  FadeIn,
-  interpolate,
-  useAnimatedScrollHandler,
-  useAnimatedStyle,
-  useSharedValue,
-} from "react-native-reanimated";
+import { memo, useMemo, useRef, useState } from "react";
+import { ScrollView, type ScrollViewInstance, Share, useWindowDimensions, View } from "react-native";
+import { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CustomisationPicker } from "@/components/CustomisationPicker";
 import { EmptyState } from "@/components/EmptyState";
 import { ProductCard } from "@/components/ProductCard";
 import { ProductImage } from "@/components/ProductImage";
+import { Skeleton } from "@/components/Skeleton";
 import { QuantityEditor } from "@/components/QuantityEditor";
-import { Button, IconButton, PressableScale, Text } from "@/components/ui";
-import { formatINR, formatPriceRange, OCCASION_META } from "@/data/catalog";
+import { Button, Chip, IconButton, PressableScale, Text } from "@/components/ui";
+import { formatINR, formatPriceRange, occasionMeta } from "@/data/catalog";
 import { useListToggle } from "@/hooks/useListToggle";
 import { useProducts } from "@/hooks/useProducts";
-import { success } from "@/lib/haptics";
+import { impact, success } from "@/lib/haptics";
+import { AnimatedView } from "@/lib/interop";
 import {
   type Choice,
   cleanCustomisations,
@@ -51,7 +46,8 @@ export default function ProductDetail() {
   const product = byId.get(id);
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const heroHeight = Math.round(height * 0.5);
+  // A framed photo about a third of the screen tall, so the details start above the fold
+  const imageHeight = Math.round(Math.min(width - 40, height * 0.34));
 
   const listed = useEnquiryList((s) => s.items.find((i) => i.productId === id));
   const put = useEnquiryList((s) => s.put);
@@ -60,24 +56,10 @@ export default function ProductDetail() {
   const [edited, setEdited] = useState<Choice | null>(null);
   const [tried, setTried] = useState(false);
 
-  const scrollY = useSharedValue(0);
-  const onScroll = useAnimatedScrollHandler((e) => {
-    scrollY.value = e.contentOffset.y;
-  });
-
-  // Parallax: image drifts slower than content and stretches on overscroll
-  const heroStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY: interpolate(
-          scrollY.value,
-          [-heroHeight, 0, heroHeight],
-          [-heroHeight / 2, 0, heroHeight * 0.4],
-        ),
-      },
-      { scale: interpolate(scrollY.value, [-heroHeight, 0], [2, 1], Extrapolation.CLAMP) },
-    ],
-  }));
+  // Where the quantity card sits, to scroll back to it when the choice is incomplete
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const contentY = useRef(0);
+  const quantityY = useRef(0);
 
   const similar = useMemo(
     () => (product ? products.filter((p) => p.category === product.category && p.id !== product.id) : []),
@@ -87,7 +69,20 @@ export default function ProductDetail() {
   if (!product) {
     return (
       <View className="flex-1 bg-canvas" style={{ paddingTop: insets.top }}>
-        {loading ? null : (
+        {loading ? (
+          <View className="gap-3 px-5 pt-2">
+            <View className="mb-1 flex-row justify-between">
+              <Skeleton width={44} height={44} radius={22} />
+              <Skeleton width={44} height={44} radius={22} />
+            </View>
+            <Skeleton width="100%" height={imageHeight} radius={28} />
+            <Skeleton width={90} height={22} radius={11} />
+            <Skeleton width="75%" height={26} radius={8} />
+            <Skeleton width="55%" height={14} radius={7} />
+            <Skeleton width="40%" height={24} radius={8} />
+            <Skeleton width="100%" height={76} radius={24} />
+          </View>
+        ) : (
           <EmptyState
             icon={Package}
             title="Gift not found"
@@ -106,6 +101,7 @@ export default function ProductDetail() {
   const inList = !!listed;
   const dirty = edited !== null;
   const optionName = product.option?.name.toLowerCase();
+  const presets = product.option ? [] : quantityPresets(product.minOrder);
 
   const share = () =>
     Share.share({
@@ -117,6 +113,8 @@ export default function ProductDetail() {
     if (inList && !dirty) return true;
     if (problem) {
       setTried(true);
+      impact();
+      scrollRef.current?.scrollTo({ y: Math.max(0, contentY.current + quantityY.current - 12) });
       return false;
     }
     success();
@@ -137,30 +135,41 @@ export default function ProductDetail() {
 
   return (
     <View className="flex-1 bg-canvas">
-      <Animated.ScrollView
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+      <View
+        className="flex-row items-center justify-between px-5 pb-3"
+        style={{ paddingTop: insets.top + 8 }}
       >
-        <Animated.View style={[{ height: heroHeight }, heroStyle]}>
-          <ProductImage source={product.images[0]} className="h-full w-full" priority="high" />
-        </Animated.View>
+        <IconButton icon={ChevronLeft} label="Go back" onPress={() => router.back()} />
+        <Text weight="semibold" className="text-[15px]">
+          Gift details
+        </Text>
+        <IconButton icon={Share2} label="Share product" onPress={share} />
+      </View>
 
-        <View className="-mt-8 rounded-t-[32px] bg-canvas px-5 pt-6">
-          <View className="mb-3 flex-row items-center gap-2">
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 140 }}
+      >
+        <View className="mx-5 overflow-hidden rounded-[28px] bg-card" style={{ height: imageHeight }}>
+          <ProductImage source={product.images[0]} className="h-full w-full" priority="high" />
+          {product.tag ? (
+            <View className="absolute left-3 top-3 rounded-full bg-ink px-3 py-1">
+              <Text weight="semibold" tone="white" className="text-[11px]">
+                {product.tag}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View className="px-5 pt-5" onLayout={(e) => (contentY.current = e.nativeEvent.layout.y)}>
+          <View className="mb-2 flex-row">
             <View className="rounded-full bg-lime-soft px-3 py-1">
               <Text weight="semibold" tone="limeInk" className="text-[11px]">
                 {product.category}
               </Text>
             </View>
-            {product.tag ? (
-              <View className="rounded-full bg-ink px-3 py-1">
-                <Text weight="semibold" tone="white" className="text-[11px]">
-                  {product.tag}
-                </Text>
-              </View>
-            ) : null}
           </View>
 
           <Text weight="extrabold" className="text-[24px] leading-[30px]">
@@ -220,7 +229,18 @@ export default function ProductDetail() {
           </View>
 
           {/* Quantity and customisation for this gift */}
-          <View className="mt-4 rounded-[28px] bg-card p-4">
+          <View
+            className="mt-4 rounded-[28px] bg-card p-4"
+            onLayout={(e) => (quantityY.current = e.nativeEvent.layout.y)}
+          >
+            {inList && !dirty ? (
+              <View className="mb-3 flex-row items-center gap-2 rounded-2xl bg-lime-soft px-3 py-2.5">
+                <Check size={15} color="#3A5512" strokeWidth={2.6} />
+                <Text weight="medium" tone="limeInk" className="flex-1 text-[12px]">
+                  In your enquiry list. Change anything below and tap Update list.
+                </Text>
+              </View>
+            ) : null}
             <View className="mb-3 flex-row items-baseline justify-between">
               <Text weight="bold" className="text-[15px]">
                 {product.option ? `Quantity by ${optionName}` : "Quantity"}
@@ -236,6 +256,18 @@ export default function ProductDetail() {
               value={choice}
               onChange={(q) => setEdited({ ...choice, ...q })}
             />
+            {presets.length ? (
+              <View className="mt-3 flex-row flex-wrap gap-2">
+                {presets.map((n) => (
+                  <Chip
+                    key={n}
+                    label={`${n} units`}
+                    selected={choice.units === n}
+                    onPress={() => setEdited({ ...choice, units: n })}
+                  />
+                ))}
+              </View>
+            ) : null}
 
             <Text weight="bold" className="mb-3 mt-5 text-[15px]">
               Customise this gift <Text tone="muted">(optional)</Text>
@@ -286,7 +318,7 @@ export default function ProductDetail() {
           <Section title="Perfect for">
             <View className="flex-row flex-wrap gap-2">
               {product.occasions.map((o) => {
-                const { icon: Icon, short } = OCCASION_META[o];
+                const { icon: Icon, short } = occasionMeta(o);
                 return (
                   <View
                     key={o}
@@ -326,42 +358,48 @@ export default function ProductDetail() {
             </ScrollView>
           </View>
         ) : null}
-      </Animated.ScrollView>
-
-      {/* Floating top buttons */}
-      <View className="absolute inset-x-0 flex-row justify-between px-5" style={{ top: insets.top + 8 }}>
-        <IconButton icon={ChevronLeft} label="Go back" onPress={() => router.back()} />
-        <IconButton icon={Share2} label="Share product" onPress={share} />
-      </View>
+      </ScrollView>
 
       {/* Sticky action bar */}
       <View
-        className="absolute inset-x-0 bottom-0 flex-row gap-3 border-t border-line bg-canvas px-5 pt-3"
+        className="absolute inset-x-0 bottom-0 border-t border-line bg-canvas px-5 pt-3"
         style={{ paddingBottom: Math.max(insets.bottom, 12) }}
       >
-        <IconButton
-          icon={MessageCircle}
-          label="Ask on WhatsApp"
-          variant="dark"
-          size={56}
-          iconColor="#25D366"
-          onPress={() => openWhatsApp(productWhatsAppMessage(product.name))}
-        />
-        <Animated.View
-          key={inList ? (dirty ? "dirty" : "in") : "out"}
-          entering={FadeIn.duration(200)}
-          className="flex-1"
-        >
-          <Button
-            label={inList ? (dirty ? "Update list" : "In your list · View") : "Add to enquiry list"}
-            icon={inList && !dirty ? Check : ShoppingBag}
-            variant={inList && !dirty ? "dark" : "primary"}
-            onPress={handleAdd}
+        {problem && tried ? (
+          <Text tone="danger" weight="medium" className="mb-2 text-center text-[13px]">
+            {problem} to add this gift
+          </Text>
+        ) : null}
+        <View className="flex-row gap-3">
+          <IconButton
+            icon={MessageCircle}
+            label="Ask on WhatsApp"
+            variant="dark"
+            size={56}
+            iconColor="#25D366"
+            onPress={() => openWhatsApp(productWhatsAppMessage(product.name))}
           />
-        </Animated.View>
+          <AnimatedView
+            key={inList ? (dirty ? "dirty" : "in") : "out"}
+            entering={FadeIn.duration(200)}
+            className="flex-1"
+          >
+            <Button
+              label={inList ? (dirty ? "Update list" : "In your list · View") : "Add to enquiry list"}
+              icon={inList && !dirty ? Check : ShoppingBag}
+              variant={inList && !dirty ? "dark" : "primary"}
+              onPress={handleAdd}
+            />
+          </AnimatedView>
+        </View>
       </View>
     </View>
   );
+}
+
+// One-tap quantities for gifts without sizes or colours, starting at the minimum order
+function quantityPresets(minOrder: number) {
+  return [...new Set([minOrder, 25, 50, 100, 250])].filter((n) => n >= minOrder).slice(0, 5);
 }
 
 const QuickAction = memo(function QuickAction({

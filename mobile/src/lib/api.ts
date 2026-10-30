@@ -1,5 +1,5 @@
 import { useCustomer } from "@/store";
-import type { Customer, CustomerProfile, Enquiry, EnquiryInput, Product } from "@/types";
+import type { Customer, CustomerProfile, Enquiry, EnquiryInput, Lists, Product } from "@/types";
 
 import { API_URL } from "./config";
 
@@ -49,6 +49,9 @@ const json = (method: string, body: unknown) => ({ method, body: JSON.stringify(
 /* ---------- Catalogue ---------- */
 
 export const getProducts = () => request<Product[]>("/api/products");
+
+// Category, occasion, customisation, status and order-stage names, in display order
+export const getLists = () => request<Lists>("/api/lists");
 
 /* ---------- Sign in with mobile number + 6-digit code (same accounts as the website) ---------- */
 

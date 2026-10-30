@@ -1,5 +1,5 @@
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
-import { router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { CalendarDays, Plus, UserRound } from "lucide-react-native";
 import { useMemo, useRef, useState } from "react";
 import {
@@ -16,8 +16,11 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { FormField } from "@/components/FormField";
 import { GiftRow } from "@/components/GiftRow";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { Skeleton } from "@/components/Skeleton";
 import { Button, Chip, PressableScale, Text } from "@/components/ui";
-import { formatINR, OCCASION_META } from "@/data/catalog";
+import { WhatsAppNotice } from "@/components/WhatsAppNotice";
+import { formatINR, occasionMeta } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { useProducts } from "@/hooks/useProducts";
 import { createEnquiry } from "@/lib/api";
 import { REPLY_WITHIN_HOURS } from "@/lib/config";
@@ -37,14 +40,20 @@ import {
   useEnquiryList,
   useMyOrders,
 } from "@/store";
-import { OCCASIONS } from "@/types";
 
 const toISODate = (d: Date) => d.toISOString().slice(0, 10);
 const daysFromNow = (days: number) => new Date(Date.now() + days * 86400000);
 const prettyDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
-export default function EnquiryForm() {
+// Only signed-in customers can send an enquiry: visitors sign in first, then come back here
+export default function EnquiryScreen() {
+  const signedIn = useCustomer(isSignedIn);
+  if (!signedIn) return <Redirect href={{ pathname: "/login", params: { next: "/enquiry" } }} />;
+  return <EnquiryForm />;
+}
+
+function EnquiryForm() {
   const insets = useSafeAreaInsets();
   const { byId } = useProducts();
   const listItems = useEnquiryList((s) => s.items);
@@ -54,7 +63,9 @@ export default function EnquiryForm() {
   const setField = useEnquiryDraft((s) => s.setField);
   const clearDraft = useEnquiryDraft((s) => s.clear);
   const customer = useCustomer((s) => s.user);
-  const signedIn = useCustomer(isSignedIn);
+  const { occasions, ready: listsReady } = useLists();
+  // A returning customer starts from the address of their last enquiry
+  const lastAddress = useMyOrders((s) => s.enquiries?.find((e) => e.address)?.address);
 
   const [errors, setErrors] = useState<EnquiryFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -62,6 +73,9 @@ export default function EnquiryForm() {
   const companyRef = useRef<TextInputInstance>(null);
   const phoneRef = useRef<TextInputInstance>(null);
   const emailRef = useRef<TextInputInstance>(null);
+  const cityRef = useRef<TextInputInstance>(null);
+  const stateRef = useRef<TextInputInstance>(null);
+  const pincodeRef = useRef<TextInputInstance>(null);
 
   // Gifts come straight from the enquiry list
   const gifts = useMemo(
@@ -91,9 +105,13 @@ export default function EnquiryForm() {
     phone: customer?.phone ?? "",
     email: customer?.email ?? "",
     deliveryDate: "",
+    addressLine: lastAddress?.line ?? "",
+    city: lastAddress?.city ?? "",
+    state: lastAddress?.state ?? "",
+    pincode: lastAddress?.pincode ?? "",
     message: "",
     ...draft,
-    occasion: draft.occasion as EnquiryFormValues["occasion"],
+    occasion: draft.occasion ?? "",
     units: totals.units,
     products,
     customisations: allCustomisations(products),
@@ -128,11 +146,6 @@ export default function EnquiryForm() {
     if (!data || found.products) {
       setErrors(found);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return;
-    }
-    // Enquiries belong to an account: sign in, then come back here (the form is saved)
-    if (!signedIn) {
-      router.push({ pathname: "/login", params: { next: "/enquiry" } });
       return;
     }
     setSubmitting(true);
@@ -176,7 +189,7 @@ export default function EnquiryForm() {
             </View>
           ) : null}
 
-          {signedIn && customer ? (
+          {customer ? (
             <View className="mb-4 flex-row items-center gap-2 self-start rounded-full bg-card px-3.5 py-2">
               <UserRound size={14} color="#73776E" />
               <Text tone="muted" className="text-[13px]">
@@ -266,14 +279,70 @@ export default function EnquiryForm() {
             />
           </Card>
 
+          <Card title="Delivery address">
+            <FormField
+              label="Address"
+              placeholder="Building, street, area"
+              value={form.addressLine}
+              onChangeText={(t) => set("addressLine", t)}
+              error={errors.addressLine}
+              autoComplete="street-address"
+              maxLength={200}
+              returnKeyType="next"
+              onSubmitEditing={() => cityRef.current?.focus()}
+            />
+            <View className="flex-row gap-3">
+              <View className="flex-1">
+                <FormField
+                  ref={cityRef}
+                  label="City"
+                  placeholder="Bengaluru"
+                  value={form.city}
+                  onChangeText={(t) => set("city", t)}
+                  error={errors.city}
+                  maxLength={60}
+                  returnKeyType="next"
+                  onSubmitEditing={() => stateRef.current?.focus()}
+                />
+              </View>
+              <View className="flex-1">
+                <FormField
+                  ref={stateRef}
+                  label="State"
+                  placeholder="Karnataka"
+                  value={form.state}
+                  onChangeText={(t) => set("state", t)}
+                  error={errors.state}
+                  maxLength={60}
+                  returnKeyType="next"
+                  onSubmitEditing={() => pincodeRef.current?.focus()}
+                />
+              </View>
+            </View>
+            <FormField
+              ref={pincodeRef}
+              label="PIN code"
+              placeholder="560001"
+              value={form.pincode}
+              onChangeText={(t) => set("pincode", t.replace(/\D/g, ""))}
+              error={errors.pincode}
+              keyboardType="number-pad"
+              autoComplete="postal-code"
+              maxLength={6}
+            />
+          </Card>
+
           <Card title="Order details">
             <Label text="Occasion" error={errors.occasion} />
             <View className="mb-4 flex-row flex-wrap gap-2">
-              {OCCASIONS.map((o) => (
+              {listsReady
+                ? null
+                : [88, 64, 96, 72].map((w) => <Skeleton key={w} width={w} height={40} radius={20} />)}
+              {occasions.map((o) => (
                 <Chip
                   key={o}
-                  label={OCCASION_META[o].short}
-                  icon={OCCASION_META[o].icon}
+                  label={occasionMeta(o).short}
+                  icon={occasionMeta(o).icon}
                   selected={form.occasion === o}
                   onPress={() => set("occasion", o)}
                 />
@@ -316,6 +385,8 @@ export default function EnquiryForm() {
               Logo printing, engraving and names are picked on each gift above.
             </Text>
           </Card>
+
+          <WhatsAppNotice />
         </ScrollView>
 
         <View
@@ -323,8 +394,7 @@ export default function EnquiryForm() {
           style={{ paddingBottom: Math.max(insets.bottom, 12) }}
         >
           <Button
-            label={signedIn ? "Send enquiry" : "Sign in to send"}
-            icon={signedIn ? undefined : UserRound}
+            label="Send enquiry"
             variant="dark"
             loading={submitting}
             onPress={() => {
@@ -332,11 +402,7 @@ export default function EnquiryForm() {
               submit();
             }}
           />
-          <Text tone="faint" className="mt-2 text-center text-[11px]">
-            {signedIn
-              ? `No payment needed. We'll call you with a quote within ${REPLY_WITHIN_HOURS} hours.`
-              : "Sign in with your mobile number. Everything you've typed stays here."}
-          </Text>
+          <WhatsAppNotice compact className="mt-2.5" />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

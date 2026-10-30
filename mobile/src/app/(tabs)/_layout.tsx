@@ -6,7 +6,13 @@ export default function TabsLayout() {
   return (
     <Tabs
       tabBar={(props) => <TabBar {...props} />}
-      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: "#F1F2EE" } }}
+      // Every tab is mounted up front, so switching tabs never waits on a first render
+      screenOptions={{
+        headerShown: false,
+        lazy: false,
+        animation: "none",
+        sceneStyle: { backgroundColor: "#F1F2EE" },
+      }}
     >
       <Tabs.Screen name="home" />
       <Tabs.Screen name="catalogue" />

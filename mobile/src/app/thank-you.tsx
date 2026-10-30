@@ -1,22 +1,19 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { Check, Clock, MessageCircle } from "lucide-react-native";
 import { useEffect } from "react";
-import { BackHandler, View } from "react-native";
-import Animated, {
-  FadeInDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withSpring,
-} from "react-native-reanimated";
+import { BackHandler, ScrollView, View } from "react-native";
+import { FadeInDown, useAnimatedStyle, useSharedValue, withDelay, withSpring } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CustomisationTags } from "@/components/orders";
 import { Button, Text } from "@/components/ui";
-import { formatINR, OCCASION_META } from "@/data/catalog";
+import { WhatsAppNotice } from "@/components/WhatsAppNotice";
+import { formatINR, occasionMeta } from "@/data/catalog";
 import { REPLY_WITHIN_HOURS } from "@/lib/config";
 import { describeVariants, enquiryEstimate } from "@/lib/items";
+import { AnimatedView } from "@/lib/interop";
 import { formatTime } from "@/lib/time";
+import { formatAddress } from "@/lib/validation";
 import { openWhatsApp } from "@/lib/whatsapp";
 import { useMyOrders } from "@/store";
 
@@ -50,18 +47,29 @@ export default function ThankYou() {
     // SafeAreaView owns padding for the insets, so horizontal padding lives on an inner view
     <SafeAreaView className="flex-1 bg-canvas">
       <View className="flex-1 px-6">
-        <View className="flex-1 items-center justify-center">
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            flexGrow: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 16,
+          }}
+        >
           <View className="mb-8 h-36 w-36 items-center justify-center">
-            <Animated.View style={ringStyle} className="absolute h-36 w-36 rounded-full bg-lime-soft" />
-            <Animated.View
-              style={checkStyle}
+            <AnimatedView
+              animatedStyle={ringStyle}
+              className="absolute h-36 w-36 rounded-full bg-lime-soft"
+            />
+            <AnimatedView
+              animatedStyle={checkStyle}
               className="h-24 w-24 items-center justify-center rounded-full bg-lime"
             >
               <Check size={44} color="#121212" strokeWidth={2.6} />
-            </Animated.View>
+            </AnimatedView>
           </View>
 
-          <Animated.View entering={FadeInDown.delay(250).duration(500)} className="items-center">
+          <AnimatedView entering={FadeInDown.delay(250).duration(500)} className="items-center">
             <Text weight="extrabold" className="mb-2 text-center text-[28px]">
               Enquiry sent!
             </Text>
@@ -79,10 +87,10 @@ export default function ThankYou() {
               </View>
             ) : null}
             <View className="mb-6" />
-          </Animated.View>
+          </AnimatedView>
 
           {enquiry ? (
-            <Animated.View
+            <AnimatedView
               entering={FadeInDown.delay(400).duration(500)}
               className="w-full rounded-[28px] bg-card p-5"
             >
@@ -114,15 +122,21 @@ export default function ThankYou() {
                   </View>
                 ))}
               </View>
-              <SummaryRow label="Occasion" value={OCCASION_META[enquiry.occasion].short} />
+              <SummaryRow label="Occasion" value={occasionMeta(enquiry.occasion).short} />
+              {enquiry.address ? (
+                <SummaryRow label="Deliver to" value={formatAddress(enquiry.address)} />
+              ) : null}
               {enquiryEstimate(enquiry.products) ? (
                 <SummaryRow label="Estimated total" value={formatINR(enquiryEstimate(enquiry.products))} />
               ) : null}
-            </Animated.View>
+            </AnimatedView>
           ) : null}
-        </View>
+          <AnimatedView entering={FadeInDown.delay(480).duration(500)} className="mt-3 w-full">
+            <WhatsAppNotice sent />
+          </AnimatedView>
+        </ScrollView>
 
-        <Animated.View entering={FadeInDown.delay(550).duration(500)} className="gap-3 pb-4">
+        <AnimatedView entering={FadeInDown.delay(550).duration(500)} className="gap-3 pb-4">
           <Button
             label="Chat with us on WhatsApp"
             icon={MessageCircle}
@@ -138,7 +152,7 @@ export default function ThankYou() {
             size="md"
             onPress={() => router.replace("/orders")}
           />
-        </Animated.View>
+        </AnimatedView>
       </View>
     </SafeAreaView>
   );

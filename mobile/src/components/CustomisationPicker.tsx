@@ -2,9 +2,10 @@ import { Check, Plus } from "lucide-react-native";
 import { memo } from "react";
 import { View } from "react-native";
 
-import { CUSTOMISATION_META, formatINR } from "@/data/catalog";
+import { customisationMeta, formatINR } from "@/data/catalog";
+import { useLists } from "@/hooks/useLists";
 import { toggleIn } from "@/lib/items";
-import { type Customisation, CUSTOMISATIONS, type Product } from "@/types";
+import type { Customisation, Product } from "@/types";
 
 import { PressableScale, Text } from "./ui";
 
@@ -21,10 +22,11 @@ export const CustomisationPicker = memo(function CustomisationPicker({
   value = [],
   onChange,
 }: Props) {
+  const { customisations } = useLists();
   return (
     <View className="gap-2">
-      {CUSTOMISATIONS.map((c) => {
-        const { icon: Icon, hint } = CUSTOMISATION_META[c];
+      {(customisations.length ? customisations : product.customisations).map((c) => {
+        const { icon: Icon, hint } = customisationMeta(c);
         const offered = product.customisations.includes(c);
         const on = offered && value.includes(c);
         return (
@@ -86,7 +88,7 @@ export const CustomisationPills = memo(function CustomisationPills({
   return (
     <View className="flex-row flex-wrap gap-1.5">
       {product.customisations.map((c) => {
-        const { icon: Icon, short } = CUSTOMISATION_META[c];
+        const { icon: Icon, short } = customisationMeta(c);
         const on = value.includes(c);
         return (
           <PressableScale

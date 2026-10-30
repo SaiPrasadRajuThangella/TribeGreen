@@ -1,12 +1,9 @@
-import { cssInterop } from "nativewind";
 import { memo, useCallback } from "react";
-import { type GestureResponderEvent, Pressable, type PressableProps } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import { type GestureResponderEvent, type PressableProps } from "react-native";
+import { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
 import { tap } from "@/lib/haptics";
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-cssInterop(AnimatedPressable, { className: "style" });
+import { AnimatedPressable } from "@/lib/interop";
 
 const SPRING = { damping: 18, stiffness: 320, mass: 0.6 };
 
@@ -23,7 +20,6 @@ export const PressableScale = memo(function PressableScale({
   onPress,
   onPressIn,
   onPressOut,
-  style,
   children,
   ...rest
 }: PressableScaleProps) {
@@ -60,7 +56,7 @@ export const PressableScale = memo(function PressableScale({
       onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      style={[animatedStyle, style as object]}
+      animatedStyle={animatedStyle}
     >
       {children}
     </AnimatedPressable>

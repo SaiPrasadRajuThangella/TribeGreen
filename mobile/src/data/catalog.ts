@@ -2,6 +2,7 @@ import {
   Briefcase,
   Coffee,
   Flame,
+  Gift,
   Handshake,
   Leaf,
   type LucideIcon,
@@ -9,6 +10,7 @@ import {
   PenTool,
   Presentation,
   Shirt,
+  Sparkles,
   Stamp,
   Trophy,
   Type,
@@ -30,23 +32,27 @@ export const getBudgetBand = (id: string) => BUDGET_BANDS.find((b) => b.id === i
 export const fitsBudget = (product: Product, band: BudgetBand) =>
   product.priceMin <= band.max && product.priceMax >= band.min;
 
-export const CATEGORY_META: Record<Category, { icon: LucideIcon; tint: string }> = {
+/*
+ * Icons, colours and short labels for the names that come from GET /api/lists.
+ * A name the app doesn't know yet (added on the server later) still shows, with a plain look.
+ */
+const CATEGORY_LOOK: Record<Category, { icon: LucideIcon; tint: string }> = {
   Drinkware: { icon: Coffee, tint: "#E8F5D0" },
   Apparel: { icon: Shirt, tint: "#F4EADF" },
   "Work Essentials": { icon: Briefcase, tint: "#E2EBF4" },
   Wellness: { icon: Leaf, tint: "#ECE5F2" },
 };
 
-export const OCCASION_META: Record<Occasion, { short: string; icon: LucideIcon }> = {
-  "Employee Onboarding": { short: "Onboarding", icon: UserPlus },
-  "Corporate Diwali Gifting": { short: "Diwali", icon: Flame },
-  "New Year Gifts": { short: "New Year", icon: PartyPopper },
-  "Client and Vendor Gifting": { short: "Clients", icon: Handshake },
-  "Events and Trade Shows": { short: "Events", icon: Presentation },
-  "Employee Recognition": { short: "Recognition", icon: Trophy },
+const OCCASION_LOOK: Record<Occasion, { short: string; icon: LucideIcon; tint: string }> = {
+  "Employee Onboarding": { short: "Onboarding", icon: UserPlus, tint: "#E8F5D0" },
+  "Corporate Diwali Gifting": { short: "Diwali", icon: Flame, tint: "#FBE6D2" },
+  "New Year Gifts": { short: "New Year", icon: PartyPopper, tint: "#ECE5F2" },
+  "Client and Vendor Gifting": { short: "Clients", icon: Handshake, tint: "#E2EBF4" },
+  "Events and Trade Shows": { short: "Events", icon: Presentation, tint: "#F4EADF" },
+  "Employee Recognition": { short: "Recognition", icon: Trophy, tint: "#FBF1C9" },
 };
 
-export const CUSTOMISATION_META: Record<Customisation, { short: string; hint: string; icon: LucideIcon }> = {
+const CUSTOMISATION_LOOK: Record<Customisation, { short: string; hint: string; icon: LucideIcon }> = {
   "Logo printing": { short: "Logo", hint: "Your logo printed or embroidered", icon: Stamp },
   "Laser engraving": { short: "Engraving", hint: "Logo or text etched into the surface", icon: PenTool },
   "Name personalisation": {
@@ -55,6 +61,14 @@ export const CUSTOMISATION_META: Record<Customisation, { short: string; hint: st
     icon: Type,
   },
 };
+
+export const categoryMeta = (name: Category) => CATEGORY_LOOK[name] ?? { icon: Gift, tint: "#E8EAE4" };
+
+export const occasionMeta = (name: Occasion) =>
+  OCCASION_LOOK[name] ?? { short: name, icon: Gift, tint: "#E8EAE4" };
+
+export const customisationMeta = (name: Customisation) =>
+  CUSTOMISATION_LOOK[name] ?? { short: name, hint: "Ask us for the details", icon: Sparkles };
 
 export const COLOUR_SWATCH: Record<string, string> = {
   Black: "#1C1C1C",

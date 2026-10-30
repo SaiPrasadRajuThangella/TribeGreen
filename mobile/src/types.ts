@@ -1,18 +1,18 @@
-export const CATEGORIES = ["Drinkware", "Apparel", "Work Essentials", "Wellness"] as const;
-export type Category = (typeof CATEGORIES)[number];
+// Category, occasion, customisation, status and order-stage names come from GET /api/lists
+// (see useLists). These aliases only say which list a name belongs to.
+export type Category = string;
+export type Occasion = string;
+export type Customisation = string;
+export type EnquiryStatus = string;
+export type OrderStage = string;
 
-export const OCCASIONS = [
-  "Employee Onboarding",
-  "Corporate Diwali Gifting",
-  "New Year Gifts",
-  "Client and Vendor Gifting",
-  "Events and Trade Shows",
-  "Employee Recognition",
-] as const;
-export type Occasion = (typeof OCCASIONS)[number];
-
-export const CUSTOMISATIONS = ["Logo printing", "Laser engraving", "Name personalisation"] as const;
-export type Customisation = (typeof CUSTOMISATIONS)[number];
+export type Lists = {
+  categories: Category[];
+  occasions: Occasion[];
+  customisations: Customisation[];
+  statuses: EnquiryStatus[];
+  orderStages: OrderStage[];
+};
 
 export type BudgetBandId = "under-500" | "500-1500" | "1500-3000" | "above-3000";
 
@@ -57,7 +57,8 @@ export type EnquiryItem = {
   listPrice?: number; // catalogue price per unit with this customisation, set by the server
 };
 
-export type EnquiryStatus = "New" | "Contacted" | "Converted" | "Lost";
+// Where the gifts are delivered
+export type Address = { line: string; city: string; state: string; pincode: string };
 
 export type EnquiryInput = {
   name: string;
@@ -67,13 +68,11 @@ export type EnquiryInput = {
   occasion: Occasion;
   units: number;
   deliveryDate: string; // ISO date (yyyy-mm-dd)
+  address: Address;
   products: EnquiryItem[];
   customisations: Customisation[]; // everything asked for across the gifts
   message: string;
 };
-
-export const ORDER_STAGES = ["Confirmed", "In production", "Dispatched", "Delivered"] as const;
-export type OrderStage = (typeof ORDER_STAGES)[number];
 
 export type OrderItem = EnquiryItem & { unitPrice: number };
 
@@ -90,7 +89,9 @@ export type Order = {
   updatedAt: string;
 };
 
-export type Enquiry = EnquiryInput & {
+// Older enquiries were sent before the address was asked for
+export type Enquiry = Omit<EnquiryInput, "address"> & {
+  address?: Address;
   id: string;
   source: "app" | "website";
   status: EnquiryStatus;

@@ -1,8 +1,9 @@
 import { AlertTriangle } from "lucide-react-native";
 import { memo } from "react";
 import { Modal, Pressable, View } from "react-native";
-import Animated, { ZoomIn } from "react-native-reanimated";
+import { ZoomIn } from "react-native-reanimated";
 
+import { AnimatedView } from "@/lib/interop";
 import { Button, Text } from "./ui";
 
 type Props = {
@@ -38,7 +39,7 @@ export const ConfirmDialog = memo(function ConfirmDialog({
     >
       <View className="flex-1 items-center justify-center bg-black/45 px-6">
         <Pressable className="absolute inset-0" onPress={onCancel} accessibilityLabel={cancelLabel} />
-        <Animated.View
+        <AnimatedView
           entering={ZoomIn.springify().damping(20).stiffness(260)}
           className="w-full max-w-[360px] items-center rounded-[28px] bg-card p-6"
         >
@@ -64,7 +65,7 @@ export const ConfirmDialog = memo(function ConfirmDialog({
               onPress={onConfirm}
             />
           </View>
-        </Animated.View>
+        </AnimatedView>
       </View>
     </Modal>
   );
