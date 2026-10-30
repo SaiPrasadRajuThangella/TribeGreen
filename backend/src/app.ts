@@ -8,6 +8,7 @@ import { meRouter, myRouter } from "./routes/account.js";
 import { adminRouter } from "./routes/admin.js";
 import { authRouter } from "./routes/auth.js";
 import { enquiriesRouter } from "./routes/enquiries.js";
+import { listsRouter } from "./routes/lists.js";
 import { productsRouter } from "./routes/products.js";
 
 export function createApp() {
@@ -20,6 +21,7 @@ export function createApp() {
   app.use(express.json({ limit: "100kb" }));
 
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
+  app.use("/api/lists", listsRouter); // category, occasion, customisation, status and stage names
   app.use("/api/products", productsRouter);
   app.use("/api/auth", authRouter); // customer sign-in with phone + code
   app.use("/api/me", meRouter);

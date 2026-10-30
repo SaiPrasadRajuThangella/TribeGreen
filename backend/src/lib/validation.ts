@@ -41,6 +41,21 @@ export const phoneChangeSchema = z.object({ phone: phoneSchema });
 
 /* ---------- Enquiries ---------- */
 
+// Where the gifts are delivered
+export const addressSchema = z.object(
+  {
+    line: z
+      .string("Enter the delivery address")
+      .trim()
+      .min(5, "Enter the full delivery address")
+      .max(200, "Keep the address under 200 characters"),
+    city: z.string("Enter the city").trim().min(2, "Enter the city").max(60),
+    state: z.string("Enter the state").trim().min(2, "Enter the state").max(60),
+    pincode: z.string("Enter the 6-digit PIN code").trim().regex(/^[1-9]\d{5}$/, "Enter a valid 6-digit PIN code"),
+  },
+  "Enter the delivery address",
+);
+
 const itemSchema = z.object({
   id: z.string().min(1),
   units: z.number("Enter the units for each gift").int("Units must be a whole number").min(1),
@@ -54,6 +69,7 @@ export const enquirySchema = profileSchema.extend({
   phone: phoneSchema,
   occasion: z.enum(OCCASIONS, "Pick an occasion"),
   deliveryDate: dateSchema.refine((d) => d > todayInIndia(), "Delivery date must be in the future"),
+  address: addressSchema,
   products: z.array(itemSchema).min(1, "Add at least one gift").max(50, "Up to 50 gifts per enquiry"),
   message: z.string().trim().max(500, "Keep the message under 500 characters").optional().default(""),
   source: z.enum(SOURCES).optional().default("website"),

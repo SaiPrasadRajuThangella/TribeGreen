@@ -40,6 +40,7 @@ const validEnquiry = () => ({
   occasion: "Employee Onboarding",
   budget: "500-1500",
   deliveryDate: inDays(20),
+  address: { line: "3rd floor, 80 Feet Road, Koramangala", city: "Bengaluru", state: "Karnataka", pincode: "560034" },
   message: "Our logo, please.",
   products: [
     {
@@ -94,6 +95,15 @@ describe("catalogue", () => {
     await request(app).get("/api/products/yoga-mat").expect(200);
     await request(app).get("/api/products/nope").expect(404);
   });
+
+  it("lists the category, occasion, customisation, status and order-stage names", async () => {
+    const res = await request(app).get("/api/lists").expect(200);
+    assert.deepEqual(res.body.categories, ["Drinkware", "Apparel", "Work Essentials", "Wellness"]);
+    assert.equal(res.body.occasions.length, 6);
+    assert.deepEqual(res.body.customisations, ["Logo printing", "Laser engraving", "Name personalisation"]);
+    assert.deepEqual(res.body.statuses, ["New", "Contacted", "Converted", "Lost"]);
+    assert.deepEqual(res.body.orderStages, ["Confirmed", "In production", "Dispatched", "Delivered"]);
+  });
 });
 
 describe("customer sign-in", () => {
@@ -128,7 +138,13 @@ describe("customer sign-in", () => {
 });
 
 describe("enquiries", () => {
-  it("checks every gift against the catalogue", async () => {
+  it("only takes enquiries from signed-in customers", async () => {
+    const res = await request(app).post("/api/enquiries").send(validEnquiry());
+    assert.equal(res.status, 401);
+  });
+
+  it("checks every gift against the catalogue, and the delivery address", async () => {
+    const { token } = await signIn("9999999999");
     const cases: [string, (b: ReturnType<typeof validEnquiry>) => void, RegExp][] = [
       ["too few units", (b) => (b.products[1].units = 5), /at least 10 units/],
       ["sizes don't add up", (b) => (b.products[0].units = 25), /add up to 20, not 25/],
@@ -137,11 +153,14 @@ describe("enquiries", () => {
       ["not offered", (b) => (b.products[1].customisations = ["Laser engraving"]), /doesn't offer laser engraving/],
       ["unknown gift", (b) => (b.products[1].id = "rocket"), /no longer in the catalogue/],
       ["date in the past", (b) => (b.deliveryDate = inDays(-1)), /in the future/],
+      ["no address", (b) => delete (b as Partial<typeof b>).address, /delivery address/],
+      ["bad PIN code", (b) => (b.address.pincode = "12345"), /6-digit PIN code/],
+      ["no city", (b) => (b.address.city = " "), /city/],
     ];
     for (const [label, change, message] of cases) {
       const body = validEnquiry();
       change(body);
-      const res = await request(app).post("/api/enquiries").send(body);
+      const res = await request(app).post("/api/enquiries").set("Authorization", `Bearer ${token}`).send(body);
       assert.equal(res.status, 400, label);
       assert.match(res.body.message, message, label);
     }
@@ -168,6 +187,7 @@ describe("enquiries", () => {
     assert.equal(e.email, "kavya@orbit.example");
     assert.equal(e.phone, "9845011111");
     assert.equal(e.status, "New");
+    assert.deepEqual(e.address, validEnquiry().address);
     assert.equal(new Date(e.respondBy).getTime() - new Date(e.createdAt).getTime(), 2 * 3600000);
     assert.equal(e._id, undefined);
     assert.equal(e.user, undefined);

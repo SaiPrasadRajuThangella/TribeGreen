@@ -12,13 +12,26 @@ export const DEMO_CUSTOMER = {
 
 const HOUR = 3600000;
 
+const BENGALURU = { line: "4th floor, 12 MG Road, Ashok Nagar", city: "Bengaluru", state: "Karnataka", pincode: "560001" };
+
+// Where each sample enquiry's gifts go
+const SAMPLE_ADDRESSES: Record<string, typeof BENGALURU> = {
+  "TG-9MX2KD": BENGALURU,
+  "TG-4QW7RT": BENGALURU,
+  "TG-8K2QXA": { line: "Tower B, Cyber City, DLF Phase 2", city: "Gurugram", state: "Haryana", pincode: "122002" },
+  "TG-6PZ2NC": { line: "G Block, Bandra Kurla Complex", city: "Mumbai", state: "Maharashtra", pincode: "400051" },
+  "TG-7HD31M": { line: "Plot 9, Hitech City Road, Madhapur", city: "Hyderabad", state: "Telangana", pincode: "500081" },
+  "TG-5RT9LP": { line: "21 Industrial Estate, Guindy", city: "Chennai", state: "Tamil Nadu", pincode: "600032" },
+  "TG-3MV8QE": { line: "Survey 44, Hinjewadi Phase 1", city: "Pune", state: "Maharashtra", pincode: "411057" },
+};
+
 export function sampleEnquiries(demoUserId: unknown, now = Date.now()) {
   const ago = (h: number) => new Date(now - h * HOUR);
   const inDays = (d: number) => new Date(now + d * 24 * HOUR).toISOString().slice(0, 10);
   const replyBy = (createdAt: Date) => new Date(createdAt.getTime() + config.REPLY_WITHIN_HOURS * HOUR);
   const base = (createdAt: Date) => ({ createdAt, respondBy: replyBy(createdAt), message: "" });
 
-  return [
+  const enquiries = [
     /* ---------- The demo customer's own (phone 9999999999) ---------- */
     {
       ...base(ago(0.5)),
@@ -266,4 +279,5 @@ export function sampleEnquiries(demoUserId: unknown, now = Date.now()) {
       message: "Booth giveaways for a 3-day expo.",
     },
   ];
+  return enquiries.map((e) => ({ ...e, address: SAMPLE_ADDRESSES[e.ref] }));
 }

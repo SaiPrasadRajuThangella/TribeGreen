@@ -2,6 +2,17 @@ import { type HydratedDocumentFromSchema, type InferSchemaType, model, Schema } 
 
 import { BUDGET_BANDS, CUSTOMISATIONS, OCCASIONS, ORDER_STAGES, SOURCES, STATUSES } from "../domain.js";
 
+// Delivery address. The API requires it on new enquiries; older ones may not have one
+const addressSchema = new Schema(
+  {
+    line: { type: String, required: true },
+    city: { type: String, required: true },
+    state: { type: String, required: true },
+    pincode: { type: String, required: true },
+  },
+  { _id: false },
+);
+
 const variantSchema = new Schema(
   { label: { type: String, required: true }, units: { type: Number, required: true } },
   { _id: false },
@@ -58,6 +69,7 @@ const enquirySchema = new Schema(
     units: { type: Number, required: true },
     budget: { type: String, enum: BUDGET_BANDS, required: true }, // worked out from the gifts
     deliveryDate: { type: String, required: true }, // yyyy-mm-dd
+    address: { type: addressSchema, default: undefined },
     products: { type: [itemSchema], required: true },
     customisations: { type: [String], enum: CUSTOMISATIONS, default: [] }, // all gifts together
     message: { type: String, default: "" },
